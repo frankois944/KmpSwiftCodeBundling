@@ -13,22 +13,44 @@ import java.io.File
  */
 internal class AppleFrameworkProject(
     private val root: File,
+    private val target: String = "iosSimulatorArm64",
+    private val targetTriple: String = "arm64-apple-ios-simulator",
+    /** macOS frameworks are versioned bundles; every other Apple platform is flat. */
+    private val isVersionedBundle: Boolean = false,
 ) {
     val frameworkDirectory: File
-        get() = root.resolve("build/bin/$TARGET/debugFramework/$FRAMEWORK_NAME.framework")
+        get() = root.resolve("build/bin/$target/debugFramework/$FRAMEWORK_NAME.framework")
+
+    private val frameworkContent: File
+        get() = if (isVersionedBundle) frameworkDirectory.resolve("Versions/A") else frameworkDirectory
 
     val frameworkBinary: File
-        get() = frameworkDirectory.resolve(FRAMEWORK_NAME)
+        get() = frameworkContent.resolve(FRAMEWORK_NAME)
+
+    val modulemapFile: File
+        get() = frameworkContent.resolve("Modules/module.modulemap")
 
     val swiftModuleDirectory: File
-        get() = frameworkDirectory.resolve("Modules/$FRAMEWORK_NAME.swiftmodule")
+        get() = frameworkContent.resolve("Modules/$FRAMEWORK_NAME.swiftmodule")
+
+    val swiftModule: File
+        get() = swiftModuleDirectory.resolve("$targetTriple.swiftmodule")
+
+    val swiftInterface: File
+        get() = swiftModuleDirectory.resolve("$targetTriple.swiftinterface")
+
+    val swiftHeader: File
+        get() = frameworkContent.resolve("Headers/$FRAMEWORK_NAME-Swift.h")
+
+    private val workDirectory: File
+        get() = root.resolve("build/swift-code-bundling/binaries/$target/debugFramework/work")
 
     val swiftObjectFiles: File
-        get() = root.resolve("build/swift-code-bundling/binaries/$TARGET/debugFramework/work/objects")
+        get() = workDirectory.resolve("objects")
 
     /** Holds the swiftc command line and its output, including `-driver-show-incremental` remarks. */
     val swiftcLog: File
-        get() = root.resolve("build/swift-code-bundling/binaries/$TARGET/debugFramework/work/logs/swiftc.log")
+        get() = workDirectory.resolve("logs/swiftc.log")
 
     fun write(
         path: String,
@@ -54,7 +76,7 @@ internal class AppleFrameworkProject(
             }
 
             kotlin {
-                $TARGET {
+                $target {
                     binaries.framework {
                         baseName = "$FRAMEWORK_NAME"
                         isStatic = $isStatic
@@ -85,7 +107,7 @@ internal class AppleFrameworkProject(
             }
 
             kotlin {
-                $TARGET {
+                $target {
                     binaries.framework {
                         baseName = "$FRAMEWORK_NAME"
                     }
@@ -106,7 +128,7 @@ internal class AppleFrameworkProject(
             }
 
             kotlin {
-                $TARGET()
+                $target()
             }
             """,
         )
@@ -157,20 +179,30 @@ internal class AppleFrameworkProject(
             .forwardOutput()
             .build()
 
-    fun link(): BuildResult = build("linkDebugFramework${TARGET.replaceFirstChar { it.uppercase() }}")
+    fun link(): BuildResult = build("linkDebugFramework${target.replaceFirstChar { it.uppercase() }}")
 
     companion object {
-        const val TARGET = "iosSimulatorArm64"
         const val FRAMEWORK_NAME = "IntegrationKit"
 
         /** Skips the test when the host cannot link an Apple framework. */
         fun assumeApplePlatform() {
             assumeTrue("needs macOS", System.getProperty("os.name").startsWith("Mac"))
-            assumeTrue(
-                "needs Xcode command line tools",
-                runCatching { ProcessBuilder("xcrun", "--find", "swiftc").start().waitFor() == 0 }.getOrDefault(false),
-            )
+            assumeTrue("needs Xcode command line tools", runsSuccessfully("xcrun", "--find", "swiftc"))
         }
+
+        /** Skips the test when the platform SDK is not installed in the current Xcode. */
+        fun assumeSdkInstalled(sdk: String) {
+            assumeTrue("needs the $sdk SDK", runsSuccessfully("xcrun", "--sdk", sdk, "--show-sdk-path"))
+        }
+
+        private fun runsSuccessfully(vararg command: String): Boolean =
+            runCatching {
+                ProcessBuilder(*command)
+                    .redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .start()
+                    .waitFor() == 0
+            }.getOrDefault(false)
     }
 }
 

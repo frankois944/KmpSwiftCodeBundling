@@ -46,13 +46,8 @@ class SwiftCodeBundlingIntegrationTest {
         project.link()
 
         assertTrue("Swift symbol missing from the framework binary", project.frameworkBinary.containsSymbol("Greeter"))
-        assertTrue(project.swiftModuleDirectory.resolve("arm64-apple-ios-simulator.swiftmodule").exists())
-        assertTrue(
-            project.frameworkDirectory
-                .resolve("Modules/module.modulemap")
-                .readText()
-                .contains("module ${AppleFrameworkProject.FRAMEWORK_NAME}.Swift"),
-        )
+        assertTrue(project.swiftModule.exists())
+        assertTrue(project.modulemapFile.readText().contains("module ${AppleFrameworkProject.FRAMEWORK_NAME}.Swift"))
     }
 
     @Test
@@ -125,10 +120,8 @@ class SwiftCodeBundlingIntegrationTest {
 
         project.link()
 
-        val swiftInterface = project.swiftModuleDirectory.resolve("arm64-apple-ios-simulator.swiftinterface")
-
-        assertTrue(swiftInterface.exists())
-        assertTrue(swiftInterface.readText().contains("public static func greet()"))
+        assertTrue(project.swiftInterface.exists())
+        assertTrue(project.swiftInterface.readText().contains("public static func greet()"))
     }
 
     @Test

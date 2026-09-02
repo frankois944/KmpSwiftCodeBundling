@@ -30,8 +30,14 @@ it is `example/`.
 - `plugin-build/compiler-plugin` — a Kotlin/Native **compiler** plugin, loaded inside the compiler.
   It must never see a Gradle class; `kotlin-native-compiler-embeddable` and the stdlib are
   `compileOnly` so nothing is bundled.
-- `example` — KMP module producing the `ExampleKit` framework for `iosArm64` / `iosSimulatorArm64`,
-  with Swift in `src/commonMain/swift` and `src/iosMain/swift`.
+- `example` — KMP module producing the `ExampleKit` framework for `iosArm64`, `iosSimulatorArm64`
+  and `iosX64`, assembled into an XCFramework, with Swift in `src/commonMain/swift` and
+  `src/iosMain/swift`.
+
+Tests come in three layers: `test` holds unit tests and TestKit functional tests that run anywhere;
+`integrationTest` links real Apple frameworks and needs macOS with Xcode (`./gradlew -p plugin-build
+integrationTest`). A skipped integration test is not a passing one — the platform tests skip
+themselves when their SDK is missing, so check the counts in the report, not just the build result.
 
 The two modules share constants by **duplication**, not by a common module: `SwiftBundling` (Gradle
 side) and `SwiftBundlingPluginIds` (compiler side). Change one, change the other.
