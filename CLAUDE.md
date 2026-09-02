@@ -145,9 +145,29 @@ them when bumping. The compiler plugin needs `optIn` on
   `gradle.properties` files for a `kotlin-compiler-embeddable` version clash on the buildscript
   classpath. Remove only once the real cause is found.
 
+## Frameworks, static frameworks, XCFrameworks
+
+Dynamic and static frameworks both go through the same path: the Swift object file is added to
+`LinkerPhaseInput.objectFiles`, which Kotlin/Native passes to the linker or the archiver.
+
+XCFrameworks need two extra things, both in `SwiftCodeBundlingConfigurator`:
+
+- **Library evolution is forced** on any framework an XCFramework is assembled from. Detection
+  matches `Framework.outputFile` against the input files of every `XCFrameworkTask` — over all of
+  them, not only those in the task graph, so a framework is built identically whether it is linked
+  on its own or through the XCFramework.
+- **Fat frameworks are patched** by `MergeBundledSwiftIntoFatFramework`. `lipo` merges binaries
+  only and the bundle structure comes from one input framework, so the `<triple>.swiftmodule` of the
+  other architectures would be missing and Swift would refuse the import. Wired from
+  `gradle.taskGraph.whenReady`, because a `FatFrameworkTask`'s frameworks are only known once KGP
+  has finished configuring the XCFramework.
+
+When checking an XCFramework, assert on `.swiftinterface` and not `.swiftmodule`: `xcodebuild
+-create-xcframework` strips the binary Swift modules, which are tied to an exact compiler version,
+and keeps the textual interfaces. Verify the merge itself on the fat framework under
+`build/<name>XCFrameworkTemp/fatframework/`, before assembly.
+
 ## Current limits
 
-Framework binaries only — XCFrameworks and fat frameworks are not wired. Swift is compiled
-whole-module every time; SKIE does incremental debug builds with `-enable-batch-mode`, an
-output-file-map and one object file per source. Validated end to end on `iosSimulatorArm64` only;
-`isStatic = true` and `iosArm64` have never been linked.
+Swift is compiled whole-module on every build; SKIE does incremental debug builds with
+`-enable-batch-mode`, an output-file-map and one object file per source.

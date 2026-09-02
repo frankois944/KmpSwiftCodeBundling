@@ -42,3 +42,40 @@ jobs:
           test -f "$FRAMEWORK/Modules/ExampleKit.swiftmodule/arm64-apple-ios-simulator.swiftmodule"
           grep -q "module ExampleKit.Swift" "$FRAMEWORK/Modules/module.modulemap"
           nm -gU "$FRAMEWORK/ExampleKit" | grep -q "SwiftGreeter"
+
+      - name: Link a static framework
+        run: ./gradlew :example:linkDebugFrameworkIosSimulatorArm64 -PexampleStaticFramework=true
+
+      - name: Verify the Swift code is in the static framework
+        run: |
+          FRAMEWORK=example/build/bin/iosSimulatorArm64/debugFramework/ExampleKit.framework
+          test -f "$FRAMEWORK/Modules/ExampleKit.swiftmodule/arm64-apple-ios-simulator.swiftmodule"
+          nm "$FRAMEWORK/ExampleKit" | grep -q "SwiftGreeter"
+
+      - name: Assemble the XCFramework
+        run: ./gradlew :example:assembleExampleKitDebugXCFramework
+
+      - name: Verify every architecture kept its Swift module
+        run: |
+          XCFRAMEWORK=example/build/XCFrameworks/debug/ExampleKit.xcframework
+          test -d "$XCFRAMEWORK"
+          # The simulator slice is a fat framework built from iosSimulatorArm64 and iosX64: lipo only
+          # merges the binaries, so both Swift modules must have been merged in by the plugin.
+          #
+          # Note: the assertions are on `.swiftinterface`, not `.swiftmodule`. `xcodebuild
+          # -create-xcframework` deliberately strips the binary Swift modules, which are tied to an
+          # exact compiler version, and keeps the textual interfaces - which only exist because an
+          # XCFramework forces library evolution on.
+          SIMULATOR=$(find "$XCFRAMEWORK" -maxdepth 1 -type d -name "ios-*-simulator")
+          SIMULATOR_MODULES="$SIMULATOR/ExampleKit.framework/Modules/ExampleKit.swiftmodule"
+          test -f "$SIMULATOR_MODULES/arm64-apple-ios-simulator.swiftinterface"
+          test -f "$SIMULATOR_MODULES/x86_64-apple-ios-simulator.swiftinterface"
+          test -f "$XCFRAMEWORK/ios-arm64/ExampleKit.framework/Modules/ExampleKit.swiftmodule/arm64-apple-ios.swiftinterface"
+
+      - name: Verify the fat framework kept both architectures before assembly
+        run: |
+          # The check that actually covers the plugin: lipo merges binaries only, so both Swift
+          # modules must have been merged into the fat framework by MergeBundledSwiftIntoFatFramework.
+          MODULES=example/build/ExampleKitXCFrameworkTemp/fatframework/debug/iosSimulator/ExampleKit.framework/Modules/ExampleKit.swiftmodule
+          test -f "$MODULES/arm64-apple-ios-simulator.swiftmodule"
+          test -f "$MODULES/x86_64-apple-ios-simulator.swiftmodule"

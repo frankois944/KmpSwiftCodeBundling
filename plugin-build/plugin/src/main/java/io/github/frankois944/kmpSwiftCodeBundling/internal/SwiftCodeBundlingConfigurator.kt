@@ -37,12 +37,30 @@ import org.jetbrains.kotlin.gradle.plugin.SubpluginOption
 import org.jetbrains.kotlin.gradle.plugin.mpp.Framework
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeCompilation
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFrameworkTask
+import org.jetbrains.kotlin.gradle.tasks.FatFrameworkTask
 
 internal class SwiftCodeBundlingConfigurator(
     private val project: Project,
     private val extension: SwiftCodeBundlingExtension,
 ) {
     private val compilerPluginConfiguration: Configuration by lazy { createCompilerPluginConfiguration() }
+
+    /**
+     * Output paths of every framework an XCFramework is assembled from.
+     *
+     * Resolved once, over all XCFramework tasks rather than only those in the task graph, so that a
+     * framework is built identically whether it is linked on its own or as part of the XCFramework.
+     * Matching on the task's input files avoids `taskDependencies.getDependencies()`, which Gradle
+     * forbids under the configuration cache.
+     */
+    private val xcFrameworkInputPaths: Set<String> by lazy {
+        project.tasks
+            .withType(XCFrameworkTask::class.java)
+            .toList()
+            .flatMap { it.inputs.files.files }
+            .mapTo(mutableSetOf()) { it.canonicalPath }
+    }
 
     fun configure() {
         if (!extension.enabled.get()) {
@@ -58,6 +76,37 @@ internal class SwiftCodeBundlingConfigurator(
 
             target.binaries.withType(Framework::class.java).configureEach { framework ->
                 configureFramework(framework)
+            }
+        }
+
+        configureFatFrameworks()
+    }
+
+    /**
+     * A fat framework is produced by `lipo`, which merges binaries only: the bundle structure is
+     * taken from a single input framework, so the Swift modules of the other architectures have to
+     * be copied in afterwards.
+     */
+    private fun configureFatFrameworks() {
+        // Deferred until the task graph is ready: the frameworks a fat framework task merges are
+        // only known once the Kotlin Gradle Plugin has finished configuring the XCFramework.
+        project.gradle.taskGraph.whenReady {
+            project.tasks.withType(FatFrameworkTask::class.java).configureEach { task ->
+                val slices =
+                    task.frameworks.mapNotNull { descriptor ->
+                        appleTargets[descriptor.target.name]?.let { appleTarget ->
+                            FatFrameworkSlice(
+                                frameworkDirectory = descriptor.file,
+                                targetTriple = appleTarget.targetTriple,
+                                architectureClangMacro = appleTarget.architectureClangMacro,
+                            )
+                        }
+                    }
+
+                val isMacosFramework =
+                    task.frameworks.firstOrNull()?.let { appleTargets[it.target.name]?.isMacos } ?: false
+
+                task.doLast(MergeBundledSwiftIntoFatFramework(task.fatFramework, isMacosFramework, slices))
             }
         }
     }
@@ -125,6 +174,18 @@ internal class SwiftCodeBundlingConfigurator(
 
         val taskName = lowerCamelCaseName("unpackSwiftSources", framework.name, framework.target.targetName)
 
+        // An XCFramework is consumed from another machine and possibly another Swift compiler, so
+        // its frameworks need a stable ABI whether or not the build asked for one.
+        val isForXCFramework = framework.outputFile.canonicalPath in xcFrameworkInputPaths
+        val libraryEvolution = extension.enableSwiftLibraryEvolution.get() || isForXCFramework
+
+        if (isForXCFramework && !extension.enableSwiftLibraryEvolution.get()) {
+            project.logger.info(
+                "Enabling Swift library evolution for {} because it is assembled into an XCFramework.",
+                framework.name,
+            )
+        }
+
         val unpackTask =
             project.tasks.register(taskName, UnpackSwiftSourcesTask::class.java) { task ->
                 task.klibs.from(project.configurations.getByName(compilation.compileDependencyConfigurationName))
@@ -157,10 +218,7 @@ internal class SwiftCodeBundlingConfigurator(
             )
             linkTask.compilerPluginOptions.addPluginArgument(
                 SwiftBundling.COMPILER_PLUGIN_ID,
-                SubpluginOption(
-                    SwiftBundling.OPTION_SWIFT_LIBRARY_EVOLUTION,
-                    extension.enableSwiftLibraryEvolution.get().toString(),
-                ),
+                SubpluginOption(SwiftBundling.OPTION_SWIFT_LIBRARY_EVOLUTION, libraryEvolution.toString()),
             )
             linkTask.compilerPluginOptions.addPluginArgument(
                 SwiftBundling.COMPILER_PLUGIN_ID,

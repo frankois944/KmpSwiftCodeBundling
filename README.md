@@ -82,18 +82,29 @@ swiftCodeBundling {
 
 | Option | What it does |
 | --- | --- |
-| `enableSwiftLibraryEvolution` | Gives the framework a stable ABI and emits `.swiftinterface` files. Required for XCFrameworks; noticeably slower to build. |
+| `enableSwiftLibraryEvolution` | Gives the framework a stable ABI and emits `.swiftinterface` files. Noticeably slower to build. Turned on automatically for frameworks assembled into an XCFramework, whatever you set here. |
 | `noClangModuleBreadcrumbsInStaticFrameworks` | For static frameworks, keeps references to a build-machine module cache out of the binary. Avoids `…/xyz.pcm: No such file or directory` warnings when debugging. |
 | `enableRelativeSourcePathsInDebugSymbols` | Records source paths relative to the root project, so the Kotlin *and* Swift sources can be debugged from a different checkout. |
 
 These mirror [SKIE's Swift compiler options](https://skie.touchlab.co/configuration/swift-compiler)
 and can also be set individually.
 
+## Frameworks, static frameworks and XCFrameworks
+
+All three work, and nothing extra needs configuring:
+
+- **Dynamic or static** — `isStatic = true` is handled; the bundled Swift ends up in the static
+  archive like any other object file.
+- **XCFramework** — declare it as usual with `XCFramework()`. Each framework carries its own Swift
+  before assembly, and library evolution is enabled for you.
+- **Fat frameworks** — when an XCFramework slice covers several architectures (an iOS simulator
+  slice built for `iosSimulatorArm64` and `iosX64`, say), `lipo` merges only the binaries, so the
+  plugin merges the Swift module of every architecture into the fat framework itself.
+
 ## Requirements and limits
 
 - macOS with Xcode, and a Kotlin/Native Apple target.
 - Kotlin 2.1.21 — the plugin uses Kotlin/Native internals and is pinned to that version.
-- Framework binaries only; XCFrameworks and fat frameworks are not wired up yet.
 
 ## License and attribution
 

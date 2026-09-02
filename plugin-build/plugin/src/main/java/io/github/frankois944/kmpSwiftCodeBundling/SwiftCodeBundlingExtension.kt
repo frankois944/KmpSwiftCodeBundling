@@ -44,8 +44,10 @@ abstract class SwiftCodeBundlingExtension
          * Enables Swift library evolution.
          *
          * Building with library evolution increases compilation time, so use it only when the
-         * framework is compiled against on another machine - notably when it is distributed inside
-         * an XCFramework.
+         * framework is compiled against on another machine.
+         *
+         * Frameworks assembled into an XCFramework always get library evolution, whatever this is
+         * set to, because an XCFramework is consumed from another machine by definition.
          */
         val enableSwiftLibraryEvolution: Property<Boolean> = objects.property(Boolean::class.java).convention(false)
 
