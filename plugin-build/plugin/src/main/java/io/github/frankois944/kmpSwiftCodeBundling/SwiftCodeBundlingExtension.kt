@@ -1,3 +1,26 @@
+/*
+ * Derived from SKIE (https://github.com/touchlab/SKIE)
+ * Copyright 2023 Touchlab, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Based on:
+ *     SKIE/skie-gradle/plugin-api/src/main/kotlin/co/touchlab/skie/plugin/configuration/SkieBuildConfiguration.kt
+ *     SKIE/skie-gradle/plugin-api/src/main/kotlin/co/touchlab/skie/plugin/configuration/SkieSwiftBundlingConfiguration.kt
+ *
+ * Changes made in this file: flattened into a single extension, keeping only the options that apply to Swift code bundling;
+ * the documentation of each option is adapted from the SKIE originals.
+ */
 package io.github.frankois944.kmpSwiftCodeBundling
 
 import org.gradle.api.model.ObjectFactory

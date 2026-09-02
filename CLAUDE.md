@@ -10,6 +10,8 @@ Guidance for Claude Code when working in this repository.
 [Swift compiler options](https://skie.touchlab.co/configuration/swift-compiler).
 
 SKIE itself is the reference implementation and is usually cloned next to this repo (`../SKIE`).
+It is Apache 2.0, Copyright 2023 Touchlab — **any file that derives code or documentation from it
+must carry the attribution header** (see an existing one for the shape) and be listed in `NOTICE`.
 When a behaviour is unclear, read SKIE's source rather than guessing — most of the design decisions
 here were taken by reading `SKIE/skie-gradle/plugin-impl/.../switflink/` and
 `SKIE/kotlin-compiler/linker-plugin/.../entrypoint/`.

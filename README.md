@@ -1,35 +1,67 @@
 # KMP Swift Code Bundling 🐦
 
-A Gradle plugin that lets a Kotlin Multiplatform module ship handwritten **Swift** code inside the
-Kotlin/Native framework it produces — a standalone reimplementation of
+Ship handwritten **Swift** code inside the framework your Kotlin Multiplatform module produces, so
+your iOS app gets one framework and one `import` — a standalone reimplementation of
 [SKIE's Swift code bundling](https://skie.touchlab.co/features/swift-code-bundling).
 
-```
+## Setup
+
+```kotlin
 plugins {
     kotlin("multiplatform")
-    id("io.github.frankois944.kmpSwiftCodeBundling")
+    id("io.github.frankois944.kmpSwiftCodeBundling") version "1.0.0"
 }
 ```
 
-Swift files go next to the Kotlin ones:
+Put Swift files next to your Kotlin ones, using the same source set names:
 
 ```
-src/commonMain/kotlin/…      src/commonMain/swift/SwiftGreeter.swift
-src/iosMain/kotlin/…         src/iosMain/swift/IosOnlyGreeter.swift
+src/commonMain/kotlin/…          src/commonMain/swift/Greeter.swift
+src/iosMain/kotlin/…             src/iosMain/swift/DeviceInfo.swift
 ```
 
-They can use the Kotlin API of the framework directly — the bundled code is compiled as a Swift
-overlay of the framework's Objective-C module, so no import is needed. Consumers get everything from
-a single `import ExampleKit`.
+That's all. Build your framework as usual (`linkDebugFrameworkIosSimulatorArm64`,
+`embedAndSignAppleFrameworkForXcode`, …) and the Swift comes along.
 
-> **Swift defaults to `internal`.** Unlike Kotlin, a declaration without a visibility modifier is not
-> visible outside the framework. Mark anything you want to expose as `public`.
+## Writing the Swift
+
+Your Swift code can use the module's Kotlin API directly, with no import:
+
+```swift
+public enum Greeter {
+    public static func greet(_ name: String) -> String {
+        Greeting().greet(name: name)   // a Kotlin class from this module
+    }
+}
+```
+
+> [!IMPORTANT]
+> **Mark everything you want to expose as `public`.** Swift declarations default to `internal`,
+> unlike Kotlin — anything without a modifier will be invisible outside the framework.
+
+Two more rules worth knowing:
+
+- **File names must be unique** across all your Swift source sets, whatever the folder. Swift
+  requires it, and the build fails with a clear message if two collide.
+- **`@objc` is needed for Objective-C consumers.** A plain Swift `enum` or `struct` reaches Swift
+  callers only; that is usually what you want.
+
+On the app side, everything arrives through the single framework import:
+
+```swift
+import ExampleKit
+
+Greeter.greet("François")   // Swift
+Greeting().greet(name: "François")  // Kotlin
+```
 
 ## Configuration
 
-```
+Every option is optional; the defaults suit local development.
+
+```kotlin
 swiftCodeBundling {
-    enabled.set(true)      // default
+    enabled.set(true)      // set to false to turn bundling off entirely
     swiftVersion.set("5")  // -swift-version
 
     freeSwiftCompilerArgs.set(listOf("-warnings-as-errors"))
@@ -38,59 +70,37 @@ swiftCodeBundling {
 
 ### Distributing the framework
 
-Mirroring [SKIE's Swift compiler options](https://skie.touchlab.co/configuration/swift-compiler),
-three options matter only when the framework is compiled against on *another* machine — publishing
-an XCFramework, say. They are off by default because each one costs build time or is only correct in
-that scenario:
+Three extra options matter only when the framework is compiled against on **another machine** —
+publishing an XCFramework, for instance. They are off by default because each costs build time or is
+only correct in that case.
 
-| Option | Effect |
-| --- | --- |
-| `enableSwiftLibraryEvolution` | Compiles with `-enable-library-evolution` and emits `.swiftinterface` files, giving the framework a stable ABI. Required for XCFrameworks; noticeably slower. |
-| `noClangModuleBreadcrumbsInStaticFrameworks` | Passes `-no-clang-module-breadcrumbs` for static frameworks, so the binary does not carry DWARF references to a module cache that only exists on the build machine. |
-| `enableRelativeSourcePathsInDebugSymbols` | Records source paths relative to the root project instead of absolute, so the Kotlin and Swift sources can be debugged from a different checkout. |
-
-Turn all three on at once with:
-
-```
+```kotlin
 swiftCodeBundling {
-    produceDistributableFramework()
+    produceDistributableFramework()   // enables all three at once
 }
 ```
 
-`enableRelativeSourcePathsInDebugSymbols` covers both languages: it adds `-file-compilation-dir .`
-to the Swift compilation and `-Xdebug-prefix-map=<rootDir>=.` to the link task, and works around the
-Kotlin/Native bug that would otherwise drop the links to the Kotlin sources — the same workaround
-SKIE applies in its `CodegenPhaseInterceptor`.
+| Option | What it does |
+| --- | --- |
+| `enableSwiftLibraryEvolution` | Gives the framework a stable ABI and emits `.swiftinterface` files. Required for XCFrameworks; noticeably slower to build. |
+| `noClangModuleBreadcrumbsInStaticFrameworks` | For static frameworks, keeps references to a build-machine module cache out of the binary. Avoids `…/xyz.pcm: No such file or directory` warnings when debugging. |
+| `enableRelativeSourcePathsInDebugSymbols` | Records source paths relative to the root project, so the Kotlin *and* Swift sources can be debugged from a different checkout. |
 
-## How it works
+These mirror [SKIE's Swift compiler options](https://skie.touchlab.co/configuration/swift-compiler)
+and can also be set individually.
 
-The feature is split between a Gradle plugin and a Kotlin/Native compiler plugin.
+## Requirements and limits
 
-| Step | Where | What happens |
-| --- | --- | --- |
-| `processSwiftSources<Target>` | Gradle | Gathers `src/<sourceSet>/swift/**/*.swift` for a compilation and checks that no two files share a name (Swift requires unique file names within a module). |
-| Compile task `doLast` | Gradle | Copies those sources into the compilation's klib, under `default/swift-code-bundling/swift`, so they travel with the published module. |
-| `unpackSwiftSources<…>` | Gradle | Extracts the bundled Swift out of every klib the binary links against — the module's own klib and its dependencies — prefixing file names with their origin to keep them unique. |
-| `LinkerPhase` interception | Compiler plugin | Runs `swiftc` against the framework's generated Objective-C headers, adds the resulting object file to the ones the native linker receives, then installs `<Framework>.swiftmodule`, `<Framework>-Swift.h` and the matching `module.modulemap` entry into the framework. |
+- macOS with Xcode, and a Kotlin/Native Apple target.
+- Kotlin 2.1.21 — the plugin uses Kotlin/Native internals and is pinned to that version.
+- Framework binaries only; XCFrameworks and fat frameworks are not wired up yet.
 
-The compiler plugin is what makes a single link possible: the Kotlin/Native `LinkerPhase` is a
-singleton whose body lives in a private field, and the plugin swaps that body for a wrapper that
-delegates to the original one with extra object files. This mirrors what SKIE does in
-`LinkerPhaseInterceptor` / `LinkObjectFilesPhase`.
+## License and attribution
 
-## Project layout
+This project is released under the license in [LICENSE](LICENSE).
 
-- [`plugin-build/plugin`](plugin-build/plugin) — the Gradle plugin.
-- [`plugin-build/compiler-plugin`](plugin-build/compiler-plugin) — the Kotlin/Native compiler plugin,
-  loaded inside the compiler and therefore free of any Gradle class.
-- [`example`](example) — a KMP module with Swift sources in `commonMain` and `iosMain`.
-
-Both are wired through a [composite build](https://docs.gradle.org/current/userguide/composite_builds.html),
-so `./gradlew :example:linkDebugFrameworkIosSimulatorArm64` builds the plugin and uses it in one go.
-
-## Status and limits
-
-- Requires macOS and a Kotlin/Native Apple target.
-- Framework binaries only; XCFrameworks and fat frameworks are not wired yet.
-- The `LinkerPhase` interception relies on Kotlin/Native internals; it is pinned to the Kotlin
-  version of `gradle/libs.versions.toml` and needs review on every Kotlin upgrade.
+It reimplements a feature of [SKIE](https://github.com/touchlab/SKIE) and derives code from it.
+SKIE is Copyright 2023 Touchlab, Inc. and licensed under the Apache License, Version 2.0, a copy of
+which is included at [licenses/LICENSE-Apache-2.0.txt](licenses/LICENSE-Apache-2.0.txt). Every file
+containing derived code carries a header naming the SKIE sources it is based on and what was
+changed; [NOTICE](NOTICE) lists them. This project is not affiliated with or endorsed by Touchlab.
