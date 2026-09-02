@@ -30,12 +30,8 @@
 
 package io.github.frankois944.kmpSwiftCodeBundling.compiler
 
-import org.jetbrains.kotlin.backend.konan.KonanConfig
-import org.jetbrains.kotlin.backend.konan.KonanConfigKeys
-import org.jetbrains.kotlin.backend.konan.driver.PhaseContext
 import org.jetbrains.kotlin.backend.konan.driver.phases.LinkerPhaseInput
 import org.jetbrains.kotlin.konan.target.AppleConfigurables
-import org.jetbrains.kotlin.konan.target.CompilerOutputKind
 import org.jetbrains.kotlin.konan.target.platformName
 import java.io.File
 
@@ -52,7 +48,7 @@ internal class SwiftBundlingLinkerStep(
         input: LinkerPhaseInput,
         next: (PhaseContext, LinkerPhaseInput) -> Unit,
     ) {
-        val konanConfig = context.config
+        val konanConfig = context.konanConfig
         val framework = konanConfig.frameworkLayout()
 
         if (framework == null) {
@@ -89,13 +85,21 @@ internal class SwiftBundlingLinkerStep(
             .sortedBy { it.absolutePath }
             .toList()
 
+    /**
+     * The framework being produced, or null when this compilation is not producing one.
+     *
+     * Recognised from the output path rather than from the compiler's output kind: the enum is one
+     * more internal API to keep working across Kotlin versions, and an existing `.framework`
+     * directory is just as conclusive.
+     */
     private fun KonanConfig.frameworkLayout(): FrameworkLayout? {
-        if (produce != CompilerOutputKind.FRAMEWORK) {
+        val outputPath = configuration.get(frameworkOutputPathKey) ?: return null
+        val directory = if (outputPath.endsWith(FRAMEWORK_SUFFIX)) File(outputPath) else File(outputPath + FRAMEWORK_SUFFIX)
+
+        if (!directory.isDirectory) {
             return null
         }
 
-        val outputPath = configuration.get(KonanConfigKeys.OUTPUT) ?: return null
-        val directory = if (outputPath.endsWith(FRAMEWORK_SUFFIX)) File(outputPath) else File(outputPath + FRAMEWORK_SUFFIX)
         val isMacos = (platform.configurables as? AppleConfigurables)?.bundlingTargetTriple()?.isMacos == true
 
         return FrameworkLayout(directory, isMacosFramework = isMacos)

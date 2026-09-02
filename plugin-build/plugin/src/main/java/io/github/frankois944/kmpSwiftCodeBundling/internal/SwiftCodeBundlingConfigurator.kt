@@ -33,6 +33,7 @@ import org.gradle.api.file.Directory
 import org.gradle.api.file.FileCollection
 import org.gradle.api.provider.Provider
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
+import org.jetbrains.kotlin.gradle.plugin.getKotlinPluginVersion
 import org.jetbrains.kotlin.gradle.plugin.SubpluginOption
 import org.jetbrains.kotlin.gradle.plugin.mpp.Framework
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeCompilation
@@ -117,7 +118,7 @@ internal class SwiftCodeBundlingConfigurator(
             isCanBeResolved = true
             isVisible = false
 
-            project.dependencies.add(name, CompilerPluginArtifact.dependencyNotation)
+            project.dependencies.add(name, CompilerPluginArtifact.dependencyNotation(project.getKotlinPluginVersion()))
         }
 
     /** Collects the Swift sources of [compilation] and stores them inside the klib it produces. */

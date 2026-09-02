@@ -3,11 +3,9 @@
 package io.github.frankois944.kmpSwiftCodeBundling.compiler
 
 import org.jetbrains.kotlin.backend.konan.NativeGenerationState
-import org.jetbrains.kotlin.backend.konan.driver.PhaseContext
 import org.jetbrains.kotlin.backend.konan.driver.phases.CodegenPhase
 import org.jetbrains.kotlin.backend.konan.driver.phases.LinkerPhase
 import org.jetbrains.kotlin.backend.konan.driver.phases.LinkerPhaseInput
-import org.jetbrains.kotlin.compiler.plugin.CompilerPluginRegistrar
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import java.io.File
 
@@ -19,7 +17,7 @@ import java.io.File
  * together with the Kotlin ones, and - only when relative source paths are requested - the
  * `CodegenPhase`, to work around a Kotlin/Native bug described in [RelativeSourcePathsWorkaround].
  */
-class SwiftBundlingCompilerPluginRegistrar : CompilerPluginRegistrar() {
+class SwiftBundlingCompilerPluginRegistrar : BaseSwiftBundlingRegistrar() {
     override val supportsK2: Boolean = true
 
     override fun ExtensionStorage.registerExtensions(configuration: CompilerConfiguration) {
