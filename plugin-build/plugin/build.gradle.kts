@@ -20,7 +20,7 @@ dependencies {
     implementation(gradleApi())
 
     // The Kotlin Gradle Plugin is provided by the consuming build, never bundled.
-    compileOnly(libs.kotlin.gradle.plugin)
+    compileOnly(libs.kotlin.gradle.plugin.min)
     functionalTestPluginClasspath(libs.kotlin.gradle.plugin)
 
     testImplementation(libs.junit)
@@ -43,20 +43,44 @@ configurations.named("integrationTestImplementation") {
 // Both source sets, otherwise `test` loses the injected plugin classpath.
 gradlePlugin.testSourceSets(sourceSets["test"], integrationTestSourceSet)
 
-val integrationTest by tasks.registering(Test::class) {
-    description = "Builds real Apple frameworks with the plugin. Requires macOS with Xcode."
+val kotlinVersionMatrixTestClass = "*KotlinVersionIntegrationTest"
+
+fun Test.configureIntegrationTest() {
     group = LifecycleBasePlugin.VERIFICATION_GROUP
 
     testClassesDirs = integrationTestSourceSet.output.classesDirs
     classpath = integrationTestSourceSet.runtimeClasspath
     shouldRunAfter(tasks.test)
 
-    // The generated projects resolve the companion compiler plugin the same way a real consumer
-    // does, from a repository, so it has to be published first.
-    dependsOn(":compiler-plugin:publishToMavenLocal")
+    // The generated projects resolve the plugins the way a real consumer does, from a repository,
+    // so they have to be published first.
+    dependsOn(":compiler-plugin:publishToMavenLocal", "publishToMavenLocal")
+
+    systemProperty("pluginVersion", project.version.toString())
+    systemProperty("kotlinVersions", compilerVariantKotlinVersions.joinToString(","))
 
     // A Kotlin/Native link is slow, and the first one downloads the toolchain.
-    timeout.set(Duration.ofMinutes(30))
+    timeout.set(Duration.ofMinutes(60))
+}
+
+val compilerVariantKotlinVersions =
+    listOf(
+        libs.versions.kotlinCompiler22.get(),
+        libs.versions.kotlinCompiler23.get(),
+        libs.versions.kotlinCompiler24.get(),
+    )
+
+val integrationTest by tasks.registering(Test::class) {
+    description = "Builds real Apple frameworks with the plugin. Requires macOS with Xcode."
+    configureIntegrationTest()
+    filter { excludeTestsMatching(kotlinVersionMatrixTestClass) }
+}
+
+val kotlinVersionTest by tasks.registering(Test::class) {
+    description = "Links a framework with every supported Kotlin version. Downloads one Kotlin/Native toolchain each."
+    configureIntegrationTest()
+    filter { includeTestsMatching(kotlinVersionMatrixTestClass) }
+    shouldRunAfter(integrationTest)
 }
 
 // The plugin has to know the coordinates of its companion compiler plugin at runtime, so they are

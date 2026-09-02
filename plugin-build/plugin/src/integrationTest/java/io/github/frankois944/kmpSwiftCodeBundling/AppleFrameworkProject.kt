@@ -17,6 +17,13 @@ internal class AppleFrameworkProject(
     private val targetTriple: String = "arm64-apple-ios-simulator",
     /** macOS frameworks are versioned bundles; every other Apple platform is flat. */
     private val isVersionedBundle: Boolean = false,
+    /**
+     * When set, the project resolves both plugins from repositories at this Kotlin version instead
+     * of taking them from the classpath TestKit injects. That is the only way to exercise a Kotlin
+     * version other than the one this build was compiled against - and it goes through the real
+     * plugin marker, exactly as a consumer would.
+     */
+    private val kotlinVersion: String? = null,
 ) {
     val frameworkDirectory: File
         get() = root.resolve("build/bin/$target/debugFramework/$FRAMEWORK_NAME.framework")
@@ -71,8 +78,7 @@ internal class AppleFrameworkProject(
             "build.gradle.kts",
             """
             plugins {
-                id("org.jetbrains.kotlin.multiplatform")
-                id("io.github.frankois944.kmpSwiftCodeBundling")
+                $pluginsBlock
             }
 
             kotlin {
@@ -102,8 +108,7 @@ internal class AppleFrameworkProject(
             "build.gradle.kts",
             """
             plugins {
-                id("org.jetbrains.kotlin.multiplatform")
-                id("io.github.frankois944.kmpSwiftCodeBundling")
+                $pluginsBlock
             }
 
             kotlin {
@@ -123,8 +128,7 @@ internal class AppleFrameworkProject(
             "library/build.gradle.kts",
             """
             plugins {
-                id("org.jetbrains.kotlin.multiplatform")
-                id("io.github.frankois944.kmpSwiftCodeBundling")
+                $pluginsBlock
             }
 
             kotlin {
@@ -133,6 +137,20 @@ internal class AppleFrameworkProject(
             """,
         )
     }
+
+    private val pluginsBlock: String
+        get() =
+            if (kotlinVersion == null) {
+                """
+                id("org.jetbrains.kotlin.multiplatform")
+                id("io.github.frankois944.kmpSwiftCodeBundling")
+                """.trimIndent()
+            } else {
+                """
+                id("org.jetbrains.kotlin.multiplatform") version "$kotlinVersion"
+                id("io.github.frankois944.kmpSwiftCodeBundling") version "$PLUGIN_VERSION"
+                """.trimIndent()
+            }
 
     /**
      * A module with no Kotlin source at all produces no framework, so every generated project gets
@@ -175,7 +193,7 @@ internal class AppleFrameworkProject(
             .create()
             .withProjectDir(root)
             .withArguments(*arguments, "--stacktrace")
-            .withPluginClasspath()
+            .apply { if (kotlinVersion == null) withPluginClasspath() }
             .forwardOutput()
             .build()
 
@@ -183,6 +201,14 @@ internal class AppleFrameworkProject(
 
     companion object {
         const val FRAMEWORK_NAME = "IntegrationKit"
+
+        /** Version of the plugin under test, published to mavenLocal by the Gradle task. */
+        val PLUGIN_VERSION: String
+            get() = System.getProperty("pluginVersion") ?: error("pluginVersion system property is not set")
+
+        /** Kotlin versions the plugin claims to support, from the version catalog. */
+        val SUPPORTED_KOTLIN_VERSIONS: List<String>
+            get() = System.getProperty("kotlinVersions")?.split(",").orEmpty()
 
         /** Skips the test when the host cannot link an Apple framework. */
         fun assumeApplePlatform() {

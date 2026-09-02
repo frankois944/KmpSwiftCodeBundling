@@ -34,10 +34,21 @@ it is `example/`.
   and `iosX64`, assembled into an XCFramework, with Swift in `src/commonMain/swift` and
   `src/iosMain/swift`.
 
-Tests come in three layers: `test` holds unit tests and TestKit functional tests that run anywhere;
-`integrationTest` links real Apple frameworks and needs macOS with Xcode (`./gradlew -p plugin-build
-integrationTest`). A skipped integration test is not a passing one — the platform tests skip
-themselves when their SDK is missing, so check the counts in the report, not just the build result.
+Tests come in three layers, all under `plugin-build/plugin`:
+
+| Task | What it covers | Where it runs |
+| --- | --- | --- |
+| `test` | Unit tests and TestKit functional tests | any host |
+| `integrationTest` | Links real Apple frameworks, four platforms, static, XCFramework, incremental | macOS with Xcode |
+| `kotlinVersionTest` | Links with every supported Kotlin version | macOS, downloads one Kotlin/Native toolchain per version, CI runs it on `main` only |
+
+`kotlinVersionTest` is the only one that resolves the plugins from a repository instead of the
+classpath TestKit injects — the only way to vary the Kotlin version, and the same path a consumer
+takes. It also exercises the *Gradle* plugin against each KGP, which is why the plugin compiles
+against the oldest supported KGP (`kotlin-gradle-plugin-min` in the catalog) rather than the newest.
+
+A skipped integration test is not a passing one — the platform tests skip themselves when their SDK
+is missing, so check the counts in the report, not just the build result.
 
 The two modules share constants by **duplication**, not by a common module: `SwiftBundling` (Gradle
 side) and `SwiftBundlingPluginIds` (compiler side). Change one, change the other.
@@ -125,18 +136,35 @@ two phases have unrelated context and input types.
 
 ## Kotlin version coupling
 
-The compiler plugin uses Kotlin/Native internals and is pinned to the `kotlin` version of
-`gradle/libs.versions.toml` (currently 2.1.21). Re-check on every Kotlin upgrade:
+The compiler plugin uses Kotlin/Native internals, so a jar built against one Kotlin version will not
+run inside another — source compatibility is not enough. The same sources are compiled once per
+Kotlin version and published as separate artifacts:
+
+- `plugin-build/compiler-plugin/src/common` — everything.
+- `plugin-build/compiler-plugin/src/compat-2.2` and `src/compat-2.4` — only the names JetBrains
+  renamed, as typealiases. 2.2 and 2.3 share the 2.2 compat file.
+- `compiler-plugin/build.gradle.kts` loops over `compilerVariants`, creating one source set, one jar
+  and one publication each (`compiler-plugin-kotlin-2.2`, `-2.3`, `-2.4`).
+- `CompilerPluginArtifact` on the Gradle side maps `project.getKotlinPluginVersion()` to a variant;
+  anything newer than the last known one falls back to it.
+
+Adding a Kotlin version means: a catalog entry, a line in `compilerVariants`, a branch in
+`CompilerPluginArtifact.variantFor`, and a new `src/compat-*` directory only if something was
+renamed. What changed so far:
 
 | API | Change |
 | --- | --- |
-| `SimpleNamedCompilerPhase` | becomes `NamedCompilerPhase` in 2.2+ |
-| `KonanConfigKeys.OUTPUT` | becomes `NativeConfigurationKeys.KONAN_OUTPUT_PATH` in 2.4 |
-| `KonanConfig` | becomes `NativeSecondStageCompilationConfig` in 2.4 |
-| `PhaseContext` | becomes `NativePhaseContext` in 2.4 |
+| `SimpleNamedCompilerPhase` | became `NamedCompilerPhase` in 2.2 — *does not affect us*, the phase body is swapped reflectively |
+| `KonanConfig` | became `NativeSecondStageCompilationConfig` in 2.4 |
+| `KonanConfigKeys` | became `NativeConfigurationKeys` in 2.4, `OUTPUT` renamed `KONAN_OUTPUT_PATH` |
+| `PhaseContext` | became `NativePhaseContext` in 2.4 |
 
-SKIE keeps version-specific source sets (`src/2.2.0..`, `src/2.4.0..`) for exactly these; consult
-them when bumping. The compiler plugin needs `optIn` on
+`LINKER_ARGS`, `STATIC_FRAMEWORK` and `DEBUG_PREFIX_MAP` kept their names, so the typealias covers
+them. `CompilerOutputKind` is deliberately not used: the framework is recognised from its output
+path instead, which is one less internal API to track. SKIE keeps version-specific source sets under
+`SKIE/kotlin-compiler/linker-plugin/src/` — consult them when bumping.
+
+The compiler plugin needs `optIn` on
 `org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi`, and its files carry
 `@file:Suppress("invisible_reference", "invisible_member")` to reach the internal APIs.
 

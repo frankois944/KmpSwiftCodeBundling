@@ -36,6 +36,11 @@ jobs:
       - name: Run the integration tests
         run: ./gradlew -p plugin-build integrationTest
 
+      - name: Link with every supported Kotlin version
+        # One Kotlin/Native toolchain is downloaded per version, so this only runs on main.
+        if: github.ref == 'refs/heads/main'
+        run: ./gradlew -p plugin-build kotlinVersionTest
+
       - name: Link the example framework
         run: ./gradlew :example:linkDebugFrameworkIosSimulatorArm64
       - name: Verify the Swift module was bundled into the framework
