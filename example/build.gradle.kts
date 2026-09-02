@@ -28,8 +28,4 @@ kotlin {
 
 swiftCodeBundling {
     swiftVersion.set("5")
-
-    // Temporary: makes the Swift driver explain, in work/logs/swiftc.log, why it recompiled each
-    // file. Remove once the incremental behaviour has been checked.
-    freeSwiftCompilerArgs.set(listOf("-driver-show-incremental"))
 }

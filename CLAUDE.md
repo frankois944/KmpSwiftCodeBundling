@@ -174,7 +174,19 @@ own `.o`, `.d`, `.swiftdeps` and `~partial.swiftmodule`; release builds use whol
 optimisation with a single object declared on the map's root entry. All the resulting object files
 go to the linker, and `deleteStaleIntermediates` removes the outputs of sources that disappeared.
 
-Incrementality is fragile and depends on timestamps, so two things must stay as they are:
+Three constraints, each found the hard way with `-driver-show-incremental` (add it to
+`freeSwiftCompilerArgs` to make the driver explain its decisions in `work/logs/swiftc.log`):
+
+- **The root entry of the output file map must declare `swift-dependencies`.** The driver uses it as
+  its build record path; without it, `Disabling incremental build: no build record path`.
+- **Per-file entries must declare only outputs the compiler actually writes** — `object` and
+  `swift-dependencies`. A `.d` without `-emit-dependencies`, or the `~partial.swiftmodule` modern
+  Swift no longer emits, gives `Missing an output` and recompiles everything.
+- **`deleteStaleIntermediates` strips only the last extension.** Unpacked sources are named
+  `bundled.<origin>.<Source>`, so cutting at the first dot matches nothing and wipes every object
+  file each build — which shows up as `Missing an output` too, from a completely different cause.
+
+Incrementality also depends on timestamps, so two more things must stay as they are:
 
 - `UnpackSwiftSourcesTask` syncs with `syncDirectoryContentIfDifferent`, leaving unchanged sources
   untouched instead of rewriting them.
