@@ -6,25 +6,51 @@ plugins {
     alias(libs.plugins.pluginPublish)
 }
 
+// The functional tests build a real Kotlin Multiplatform project, so the Kotlin Gradle Plugin has to
+// be on the classpath injected by `withPluginClasspath()` - it is only `compileOnly` for the plugin
+// itself, which must never bundle it.
+val functionalTestPluginClasspath: Configuration by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
 dependencies {
     implementation(kotlin("stdlib"))
     implementation(gradleApi())
 
     // The Kotlin Gradle Plugin is provided by the consuming build, never bundled.
     compileOnly(libs.kotlin.gradle.plugin)
+    functionalTestPluginClasspath(libs.kotlin.gradle.plugin)
 
     testImplementation(libs.junit)
+    testImplementation(gradleTestKit())
 }
 
-tasks.processResources {
-    filesMatching("**/plugin.properties") {
-        expand(
-            mapOf(
-                "pluginGroup" to project.group.toString(),
-                "pluginVersion" to project.version.toString(),
-            ),
-        )
-    }
+tasks.pluginUnderTestMetadata {
+    pluginClasspath.from(functionalTestPluginClasspath)
+}
+
+// The plugin has to know the coordinates of its companion compiler plugin at runtime, so they are
+// generated into a resource rather than hardcoded.
+//
+// This is a generated file rather than a `processResources` filter on purpose: IntelliJ cannot model
+// `filesMatching { expand(...) }` and warns "Cannot resolve resource filtering of MatchingCopyAction"
+// on every Gradle sync. A generated resource directory is something it understands.
+val generatedPluginResources: Provider<Directory> = layout.buildDirectory.dir("generated/pluginResources")
+
+val generatePluginProperties by tasks.registering(WriteProperties::class) {
+    destinationFile.set(
+        generatedPluginResources.map { it.file("io/github/frankois944/kmpSwiftCodeBundling/plugin.properties") },
+    )
+    property("group", project.group.toString())
+    property("version", project.version.toString())
+}
+
+sourceSets.named("main") {
+    // `files(...).builtBy(...)` and not `map`/`flatMap` on the task provider: mapping to a provider
+    // that has no producer of its own (`layout.buildDirectory`) silently drops the task dependency,
+    // the generator never runs, and the plugin cannot read its own coordinates at runtime.
+    resources.srcDir(files(generatedPluginResources).builtBy(generatePluginProperties))
 }
 
 java {
@@ -66,7 +92,7 @@ tasks.named("check").configure {
     )
 }
 
-tasks.create("setupPluginUploadFromEnvironment") {
+tasks.register("setupPluginUploadFromEnvironment") {
     doLast {
         val key = System.getenv("GRADLE_PUBLISH_KEY")
         val secret = System.getenv("GRADLE_PUBLISH_SECRET")

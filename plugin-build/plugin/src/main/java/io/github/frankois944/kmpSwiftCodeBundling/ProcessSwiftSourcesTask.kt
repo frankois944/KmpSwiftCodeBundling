@@ -33,6 +33,7 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import java.io.File
 import javax.inject.Inject
 
 /**
@@ -69,26 +70,25 @@ abstract class ProcessSwiftSourcesTask : DefaultTask() {
             searchedDirectories.getOrElse(emptyList()).joinToString(", "),
         )
 
+        // Checked before copying: two files with the same name in different source sets would
+        // otherwise collide during the sync and fail with a copy error instead of this message.
+        verifyFileNames(sources)
+
         fileSystemOperations.sync {
             it.duplicatesStrategy = DuplicatesStrategy.FAIL
             it.from(swiftSources)
             it.into(output)
         }
-
-        verifyFileNames()
     }
 
-    private fun verifyFileNames() {
-        output
-            .get()
-            .asFile
-            .walkTopDown()
-            .filter { it.isFile && it.extension == "swift" }
+    private fun verifyFileNames(sources: Set<File>) {
+        sources
+            .filter { it.extension == "swift" }
             .groupBy { it.name }
             .forEach { (name, files) ->
                 check(files.size == 1) {
-                    "Files $files have the same name '$name'. Swift requires every file of a module to have a " +
-                        "unique name, regardless of its path."
+                    "Swift files ${files.map { it.path }} have the same name '$name'. Swift requires every file " +
+                        "of a module to have a unique name, regardless of its path."
                 }
             }
     }
