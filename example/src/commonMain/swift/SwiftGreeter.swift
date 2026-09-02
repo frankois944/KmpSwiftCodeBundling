@@ -11,6 +11,6 @@ public enum SwiftGreeter {
     }
 
     public static func shout(_ name: String) -> String {
-        greet(name).uppercased()
+        greet(name).uppercased() + "!"
     }
 }

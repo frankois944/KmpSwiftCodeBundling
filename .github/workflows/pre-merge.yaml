@@ -33,6 +33,9 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Cache Gradle Caches
         uses: gradle/actions/setup-gradle@v4
+      - name: Run the integration tests
+        run: ./gradlew -p plugin-build integrationTest
+
       - name: Link the example framework
         run: ./gradlew :example:linkDebugFrameworkIosSimulatorArm64
       - name: Verify the Swift module was bundled into the framework

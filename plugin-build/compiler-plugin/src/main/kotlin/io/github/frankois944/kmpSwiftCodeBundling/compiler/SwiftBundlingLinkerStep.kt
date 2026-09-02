@@ -77,7 +77,7 @@ internal class SwiftBundlingLinkerStep(
 
         konanConfig.addSwiftRuntimeLinkerArguments(configurables)
 
-        next(context, input.copy(objectFiles = input.objectFiles + compilation.objectFile.absolutePath))
+        next(context, input.copy(objectFiles = input.objectFiles + compilation.objectFiles.map { it.absolutePath }))
 
         installIntoFramework(framework, targetTriple, compilation)
     }
@@ -122,23 +122,54 @@ internal class SwiftBundlingLinkerStep(
 
         val moduleDirectory = options.workDirectory.resolve("module").also { it.mkdirs() }
         val objectDirectory = options.workDirectory.resolve("objects").also { it.mkdirs() }
+        val configDirectory = options.workDirectory.resolve("config").also { it.mkdirs() }
+
+        val isDebug = konanConfig.debug
+        val moduleName = framework.frameworkName
+
+        // Paths are relative to the working directory set below. The output file map is keyed by the
+        // very same strings, which is what lets the Swift compiler match a source to its outputs.
+        val units =
+            swiftSources.map { source ->
+                SwiftSourceUnit(
+                    relativePath = source.relativeTo(options.swiftSourcesDirectory).path,
+                    baseName = source.nameWithoutExtension,
+                )
+            }
+
+        val objectFiles =
+            if (isDebug) {
+                units.map { objectDirectory.resolve("${it.baseName}.o") }
+            } else {
+                listOf(objectDirectory.resolve("$moduleName.o"))
+            }
 
         val output =
             SwiftCompilationOutput(
-                objectFile = objectDirectory.resolve("${framework.frameworkName}.o"),
-                swiftModule = moduleDirectory.resolve("${framework.frameworkName}.swiftmodule"),
-                swiftDoc = moduleDirectory.resolve("${framework.frameworkName}.swiftdoc"),
-                swiftSourceInfo = moduleDirectory.resolve("${framework.frameworkName}.swiftsourceinfo"),
-                abiJson = moduleDirectory.resolve("${framework.frameworkName}.abi.json"),
-                swiftInterface = moduleDirectory.resolve("${framework.frameworkName}.swiftinterface"),
-                privateSwiftInterface = moduleDirectory.resolve("${framework.frameworkName}.private.swiftinterface"),
-                swiftHeader = moduleDirectory.resolve("${framework.frameworkName}-Swift.h"),
+                objectFiles = objectFiles,
+                swiftModule = moduleDirectory.resolve("$moduleName.swiftmodule"),
+                swiftDoc = moduleDirectory.resolve("$moduleName.swiftdoc"),
+                swiftSourceInfo = moduleDirectory.resolve("$moduleName.swiftsourceinfo"),
+                abiJson = moduleDirectory.resolve("$moduleName.abi.json"),
+                swiftInterface = moduleDirectory.resolve("$moduleName.swiftinterface"),
+                privateSwiftInterface = moduleDirectory.resolve("$moduleName.private.swiftinterface"),
+                swiftHeader = moduleDirectory.resolve("$moduleName-Swift.h"),
             )
+
+        val outputFileMap = configDirectory.resolve("output-file-map.json")
+        outputFileMap.writeText(outputFileMapContent(moduleName, moduleDirectory, objectDirectory, units, isDebug))
+
+        // A response file rather than the command line: a module with many sources would otherwise
+        // risk overflowing the argument limit.
+        val sourceList = configDirectory.resolve("swift-sources.txt")
+        sourceList.writeText(units.joinToString("\n") { "'${it.relativePath}'" })
+
+        deleteStaleIntermediates(objectDirectory, if (isDebug) units.mapTo(mutableSetOf()) { it.baseName } else setOf(moduleName))
 
         val arguments =
             buildList {
                 add(File(configurables.absoluteTargetToolchain, "bin/swiftc").absolutePath)
-                addAll(listOf("-module-name", framework.frameworkName))
+                addAll(listOf("-module-name", moduleName))
                 add("-import-underlying-module")
                 addAll(listOf("-F", kotlinFramework.parentDirectory.absolutePath))
                 add("-emit-module")
@@ -147,9 +178,21 @@ internal class SwiftBundlingLinkerStep(
                 addAll(listOf("-emit-objc-header-path", output.swiftHeader.absolutePath))
                 add("-emit-object")
                 add("-parse-as-library")
-                add("-whole-module-optimization")
-                add(if (konanConfig.debug) "-Onone" else "-O")
-                addAll(listOf("-o", output.objectFile.absolutePath))
+
+                if (isDebug) {
+                    // Incremental mode: the compiler reads the `.swiftdeps` left by the previous run
+                    // and recompiles only what changed. This is why the unpacked sources are synced
+                    // rather than rewritten - the Swift compiler decides from timestamps.
+                    add("-Onone")
+                    add("-incremental")
+                    add("-enable-batch-mode")
+                    add("-j${Runtime.getRuntime().availableProcessors()}")
+                } else {
+                    add("-O")
+                    add("-whole-module-optimization")
+                }
+
+                addAll(listOf("-output-file-map", outputFileMap.absolutePath))
                 add("-g")
                 addAll(listOf("-module-cache-path", options.workDirectory.resolve("module-cache").absolutePath))
                 addAll(listOf("-swift-version", options.swiftVersion))
@@ -174,10 +217,7 @@ internal class SwiftBundlingLinkerStep(
                 }
 
                 addAll(options.freeCompilerArgs)
-
-                // Paths are relative to the working directory set below, so that `-file-compilation-dir`
-                // has something relative to anchor the debug symbols to.
-                addAll(swiftSources.map { it.relativeTo(options.swiftSourcesDirectory).path })
+                add("@${sourceList.absolutePath}")
             }
 
         Command(arguments).execute(
@@ -187,6 +227,82 @@ internal class SwiftBundlingLinkerStep(
 
         return output
     }
+
+    /**
+     * Tells the Swift compiler where to put the outputs of each source file.
+     *
+     * In debug this is what makes the build incremental. Two things are needed, and both were found
+     * the hard way with `-driver-show-incremental`:
+     *
+     * - The root entry must declare `swift-dependencies`. The driver uses it as the path of its
+     *   build record; without it the whole thing is skipped with "Disabling incremental build: no
+     *   build record path".
+     * - Per-file entries must declare only outputs the compiler actually writes. The driver checks
+     *   every declared output before skipping a file, so a `.d` without `-emit-dependencies`, or the
+     *   `~partial.swiftmodule` that modern Swift no longer emits when the module is written
+     *   directly, makes it report "Missing an output" and recompile everything, every build.
+     *
+     * A release build compiles the whole module at once, so the root entry carries a single object
+     * instead.
+     */
+    private fun outputFileMapContent(
+        moduleName: String,
+        moduleDirectory: File,
+        objectDirectory: File,
+        units: List<SwiftSourceUnit>,
+        isDebug: Boolean,
+    ): String {
+        val entries =
+            buildList {
+                if (isDebug) {
+                    val buildRecord = moduleDirectory.resolve("$moduleName.swiftdeps")
+
+                    add("""  "": { "swift-dependencies": ${buildRecord.jsonString()} }""")
+
+                    units.forEach { unit ->
+                        val fields =
+                            listOf(
+                                """"object": ${objectDirectory.resolve("${unit.baseName}.o").jsonString()}""",
+                                """"swift-dependencies": ${objectDirectory.resolve("${unit.baseName}.swiftdeps").jsonString()}""",
+                            )
+
+                        add("""  ${unit.relativePath.jsonString()}: { ${fields.joinToString(", ")} }""")
+                    }
+                } else {
+                    add("""  "": { "object": ${objectDirectory.resolve("$moduleName.o").jsonString()} }""")
+                }
+            }
+
+        return entries.joinToString(",\n", prefix = "{\n", postfix = "\n}\n")
+    }
+
+    /**
+     * Removes the outputs of sources that no longer exist.
+     *
+     * They would otherwise keep being handed to the linker, so a deleted Swift file would stay in
+     * the framework until the build directory is wiped.
+     *
+     * Only the last extension is stripped: unpacked sources are named `bundled.<origin>.<Source>`,
+     * so cutting at the first dot would match nothing and wipe every object file on every build -
+     * which the Swift driver then reports as "Missing an output", recompiling everything.
+     */
+    private fun deleteStaleIntermediates(
+        objectDirectory: File,
+        expectedBaseNames: Set<String>,
+    ) {
+        objectDirectory
+            .listFiles()
+            .orEmpty()
+            .filter { it.isFile }
+            .filterNot { it.baseNameOfIntermediate() in expectedBaseNames }
+            .forEach { it.delete() }
+    }
+
+    private fun File.baseNameOfIntermediate(): String = name.substringBeforeLast(".").removeSuffix("~partial")
+
+    private fun File.jsonString(): String = absolutePath.jsonString()
+
+    private fun String.jsonString(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
     /**
      * swiftc compiles the bundled code as an overlay of the Kotlin framework's Clang module, which
@@ -210,15 +326,34 @@ internal class SwiftBundlingLinkerStep(
         copy.headersDirectory.mkdirs()
         copy.modulesDirectory.mkdirs()
 
-        framework.kotlinHeader.copyTo(copy.kotlinHeader, overwrite = true)
+        // Copied only when the content actually differs. Rewriting an identical file would move its
+        // timestamp, and the Swift compiler decides what to recompile from timestamps - an
+        // unconditional copy would defeat the incremental build on every single run.
+        framework.kotlinHeader.copyToIfDifferent(copy.kotlinHeader)
 
         if (framework.apiNotes.exists()) {
-            framework.apiNotes.copyTo(copy.apiNotes, overwrite = true)
+            framework.apiNotes.copyToIfDifferent(copy.apiNotes)
         }
 
-        copy.modulemapFile.writeText(framework.modulemapFile.readText().withoutBundledSwiftModule())
+        copy.modulemapFile.writeTextIfDifferent(framework.modulemapFile.readText().withoutBundledSwiftModule())
 
         return copy
+    }
+
+    private fun File.copyToIfDifferent(destination: File) {
+        if (destination.exists() && destination.length() == length() && destination.readBytes().contentEquals(readBytes())) {
+            return
+        }
+
+        copyTo(destination, overwrite = true)
+    }
+
+    private fun File.writeTextIfDifferent(content: String) {
+        if (exists() && readText() == content) {
+            return
+        }
+
+        writeText(content)
     }
 
     private fun installIntoFramework(
@@ -316,8 +451,13 @@ internal class SwiftBundlingLinkerStep(
     }
 }
 
+internal data class SwiftSourceUnit(
+    val relativePath: String,
+    val baseName: String,
+)
+
 internal class SwiftCompilationOutput(
-    val objectFile: File,
+    val objectFiles: List<File>,
     val swiftModule: File,
     val swiftDoc: File,
     val swiftSourceInfo: File,

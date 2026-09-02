@@ -167,7 +167,20 @@ When checking an XCFramework, assert on `.swiftinterface` and not `.swiftmodule`
 and keeps the textual interfaces. Verify the merge itself on the fat framework under
 `build/<name>XCFrameworkTemp/fatframework/`, before assembly.
 
-## Current limits
+## Incremental Swift compilation
 
-Swift is compiled whole-module on every build; SKIE does incremental debug builds with
-`-enable-batch-mode`, an output-file-map and one object file per source.
+Debug builds pass `-incremental -enable-batch-mode` with an output file map giving every source its
+own `.o`, `.d`, `.swiftdeps` and `~partial.swiftmodule`; release builds use whole-module
+optimisation with a single object declared on the map's root entry. All the resulting object files
+go to the linker, and `deleteStaleIntermediates` removes the outputs of sources that disappeared.
+
+Incrementality is fragile and depends on timestamps, so two things must stay as they are:
+
+- `UnpackSwiftSourcesTask` syncs with `syncDirectoryContentIfDifferent`, leaving unchanged sources
+  untouched instead of rewriting them.
+- `prepareFrameworkForSwiftCompilation` copies the Kotlin header, apinotes and module map into the
+  work directory only when their content differs. An unconditional copy moves their timestamps and
+  makes the Swift compiler rebuild everything, every time.
+
+Sources and output-file-map keys are the same relative paths, resolved against the working directory
+(the unpacked sources directory); the source list is passed as a `@response` file.

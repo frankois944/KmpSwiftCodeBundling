@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.time.Duration
 
 plugins {
     kotlin("jvm")
@@ -28,6 +29,34 @@ dependencies {
 
 tasks.pluginUnderTestMetadata {
     pluginClasspath.from(functionalTestPluginClasspath)
+}
+
+// Integration tests build real Apple frameworks, so they need macOS, Xcode and the Kotlin/Native
+// toolchain. They live in their own source set and their own task: `test` has to stay runnable
+// anywhere and fast.
+val integrationTestSourceSet: SourceSet = sourceSets.create("integrationTest")
+
+configurations.named("integrationTestImplementation") {
+    extendsFrom(configurations.getByName("testImplementation"))
+}
+
+// Both source sets, otherwise `test` loses the injected plugin classpath.
+gradlePlugin.testSourceSets(sourceSets["test"], integrationTestSourceSet)
+
+val integrationTest by tasks.registering(Test::class) {
+    description = "Builds real Apple frameworks with the plugin. Requires macOS with Xcode."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+
+    testClassesDirs = integrationTestSourceSet.output.classesDirs
+    classpath = integrationTestSourceSet.runtimeClasspath
+    shouldRunAfter(tasks.test)
+
+    // The generated projects resolve the companion compiler plugin the same way a real consumer
+    // does, from a repository, so it has to be published first.
+    dependsOn(":compiler-plugin:publishToMavenLocal")
+
+    // A Kotlin/Native link is slow, and the first one downloads the toolchain.
+    timeout.set(Duration.ofMinutes(30))
 }
 
 // The plugin has to know the coordinates of its companion compiler plugin at runtime, so they are
