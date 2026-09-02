@@ -1,95 +1,96 @@
-# kotlin-gradle-plugin-template 🐘
+# KMP Swift Code Bundling 🐦
 
-[![Use this template](https://img.shields.io/badge/-Use%20this%20template-brightgreen)](https://github.com/cortinico/kotlin-gradle-plugin-template/generate) [![Pre Merge Checks](https://github.com/cortinico/kotlin-gradle-plugin-template/workflows/Pre%20Merge%20Checks/badge.svg)](https://github.com/cortinico/kotlin-gradle-plugin-template/actions?query=workflow%3A%22Pre+Merge+Checks%22)  [![License](https://img.shields.io/github/license/cortinico/kotlin-android-template.svg)](LICENSE) ![Language](https://img.shields.io/github/languages/top/cortinico/kotlin-android-template?color=blue&logo=kotlin)
-
-A simple Github template that lets you create a **Gradle Plugin** 🐘 project using **100% Kotlin** and be up and running in a **few seconds**.
-
-This template is focused on delivering a project with **static analysis** and **continuous integration** already in place.
-
-## How to use 👣
-
-Just click on [![Use this template](https://img.shields.io/badge/-Use%20this%20template-brightgreen)](https://github.com/cortinico/kotlin-gradle-plugin-template/generate) button to create a new repo starting from this template.
-
-Once created don't forget to update the:
-- [gradle.properties](plugin-build/gradle.properties)
-- Plugin Usages (search for [com.ncorti.kotlin.gradle.template](https://github.com/cortinico/kotlin-gradle-plugin-template/search?q=com.ncorti.kotlin.gradle.template&unscoped_q=com.ncorti.kotlin.gradle.template) in the repo and replace it with your ID).
-
-## Features 🎨
-
-- **100% Kotlin-only template**.
-- Plugin build setup with **composite build**.
-- 100% Gradle Kotlin DSL setup.
-- Dependency versions managed via Gradle Versions Catalog (`libs.versions.toml`).
-- CI Setup with GitHub Actions.
-- Kotlin Static Analysis via `ktlint` and `detekt`.
-- Publishing-ready to Gradle Portal.
-- Issues Template (bug report + feature request)
-- Pull Request Template.
-
-## Composite Build 📦
-
-This template is using a [Gradle composite build](https://docs.gradle.org/current/userguide/composite_builds.html) to build, test and publish the plugin. This means that you don't need to run Gradle twice to test the changes on your Gradle plugin (no more `publishToMavenLocal` tricks or so).
-
-The included build is inside the [plugin-build](plugin-build) folder.
-
-### `preMerge` task
-
-A `preMerge` task on the top level build is already provided in the template. This allows you to run all the `check` tasks both in the top level and in the included build.
-
-You can easily invoke it with:
+A Gradle plugin that lets a Kotlin Multiplatform module ship handwritten **Swift** code inside the
+Kotlin/Native framework it produces — a standalone reimplementation of
+[SKIE's Swift code bundling](https://skie.touchlab.co/features/swift-code-bundling).
 
 ```
-./gradlew preMerge
+plugins {
+    kotlin("multiplatform")
+    id("io.github.frankois944.kmpSwiftCodeBundling")
+}
 ```
 
-If you need to invoke a task inside the included build with:
+Swift files go next to the Kotlin ones:
 
 ```
-./gradlew -p plugin-build <task-name>
+src/commonMain/kotlin/…      src/commonMain/swift/SwiftGreeter.swift
+src/iosMain/kotlin/…         src/iosMain/swift/IosOnlyGreeter.swift
 ```
 
+They can use the Kotlin API of the framework directly — the bundled code is compiled as a Swift
+overlay of the framework's Objective-C module, so no import is needed. Consumers get everything from
+a single `import ExampleKit`.
 
-### Dependency substitution
+> **Swift defaults to `internal`.** Unlike Kotlin, a declaration without a visibility modifier is not
+> visible outside the framework. Mark anything you want to expose as `public`.
 
-Please note that the project relies on module name/group in order for [dependency substitution](https://docs.gradle.org/current/userguide/resolution_rules.html#sec:dependency_substitution_rules) to work properly. If you change only the plugin ID everything will work as expected. If you change module name/group, things might break and you probably have to specify a [substitution rule](https://docs.gradle.org/current/userguide/resolution_rules.html#sub:project_to_module_substitution).
+## Configuration
 
+```
+swiftCodeBundling {
+    enabled.set(true)      // default
+    swiftVersion.set("5")  // -swift-version
 
-## Publishing 🚀
+    freeSwiftCompilerArgs.set(listOf("-warnings-as-errors"))
+}
+```
 
-This template is ready to let you publish to [Gradle Portal](https://plugins.gradle.org/).
+### Distributing the framework
 
-The [![Publish Plugin to Portal](https://github.com/cortinico/kotlin-gradle-plugin-template/workflows/Publish%20Plugin%20to%20Portal/badge.svg?branch=1.0.0)](https://github.com/cortinico/kotlin-gradle-plugin-template/actions?query=workflow%3A%22Publish+Plugin+to+Portal%22) Github Action will take care of the publishing whenever you **push a tag**.
+Mirroring [SKIE's Swift compiler options](https://skie.touchlab.co/configuration/swift-compiler),
+three options matter only when the framework is compiled against on *another* machine — publishing
+an XCFramework, say. They are off by default because each one costs build time or is only correct in
+that scenario:
 
-Please note that you need to configure two secrets: `GRADLE_PUBLISH_KEY` and `GRADLE_PUBLISH_SECRET` with the credentials you can get from your profile on the Gradle Portal.
+| Option | Effect |
+| --- | --- |
+| `enableSwiftLibraryEvolution` | Compiles with `-enable-library-evolution` and emits `.swiftinterface` files, giving the framework a stable ABI. Required for XCFrameworks; noticeably slower. |
+| `noClangModuleBreadcrumbsInStaticFrameworks` | Passes `-no-clang-module-breadcrumbs` for static frameworks, so the binary does not carry DWARF references to a module cache that only exists on the build machine. |
+| `enableRelativeSourcePathsInDebugSymbols` | Records source paths relative to the root project instead of absolute, so the Kotlin and Swift sources can be debugged from a different checkout. |
 
-## 100% Kotlin 🅺
+Turn all three on at once with:
 
-This template is designed to use Kotlin everywhere. The build files are written using [**Gradle Kotlin DSL**](https://docs.gradle.org/current/userguide/kotlin_dsl.html) as well as the [Plugin DSL](https://docs.gradle.org/current/userguide/plugins.html#sec:plugins_block) to setup the build.
+```
+swiftCodeBundling {
+    produceDistributableFramework()
+}
+```
 
-Dependencies are centralized inside the [libs.versions.toml](gradle/libs.versions.toml).
+`enableRelativeSourcePathsInDebugSymbols` covers both languages: it adds `-file-compilation-dir .`
+to the Swift compilation and `-Xdebug-prefix-map=<rootDir>=.` to the link task, and works around the
+Kotlin/Native bug that would otherwise drop the links to the Kotlin sources — the same workaround
+SKIE applies in its `CodegenPhaseInterceptor`.
 
-Moreover, a minimalistic Gradle Plugin is already provided in Kotlin to let you easily start developing your own around it.
+## How it works
 
-## Static Analysis 🔍
+The feature is split between a Gradle plugin and a Kotlin/Native compiler plugin.
 
-This template is using [**ktlint**](https://github.com/pinterest/ktlint) with the [ktlint-gradle](https://github.com/jlleitschuh/ktlint-gradle) plugin to format your code. To reformat all the source code as well as the buildscript you can run the `ktlintFormat` gradle task.
+| Step | Where | What happens |
+| --- | --- | --- |
+| `processSwiftSources<Target>` | Gradle | Gathers `src/<sourceSet>/swift/**/*.swift` for a compilation and checks that no two files share a name (Swift requires unique file names within a module). |
+| Compile task `doLast` | Gradle | Copies those sources into the compilation's klib, under `default/swift-code-bundling/swift`, so they travel with the published module. |
+| `unpackSwiftSources<…>` | Gradle | Extracts the bundled Swift out of every klib the binary links against — the module's own klib and its dependencies — prefixing file names with their origin to keep them unique. |
+| `LinkerPhase` interception | Compiler plugin | Runs `swiftc` against the framework's generated Objective-C headers, adds the resulting object file to the ones the native linker receives, then installs `<Framework>.swiftmodule`, `<Framework>-Swift.h` and the matching `module.modulemap` entry into the framework. |
 
-This template is also using [**detekt**](https://github.com/arturbosch/detekt) to analyze the source code, with the configuration that is stored in the [detekt.yml](config/detekt/detekt.yml) file (the file has been generated with the `detektGenerateConfig` task).
+The compiler plugin is what makes a single link possible: the Kotlin/Native `LinkerPhase` is a
+singleton whose body lives in a private field, and the plugin swaps that body for a wrapper that
+delegates to the original one with extra object files. This mirrors what SKIE does in
+`LinkerPhaseInterceptor` / `LinkObjectFilesPhase`.
 
-## CI ⚙️
+## Project layout
 
-This template is using [**GitHub Actions**](https://github.com/cortinico/kotlin-android-template/actions) as CI. You don't need to setup any external service and you should have a running CI once you start using this template.
+- [`plugin-build/plugin`](plugin-build/plugin) — the Gradle plugin.
+- [`plugin-build/compiler-plugin`](plugin-build/compiler-plugin) — the Kotlin/Native compiler plugin,
+  loaded inside the compiler and therefore free of any Gradle class.
+- [`example`](example) — a KMP module with Swift sources in `commonMain` and `iosMain`.
 
-There are currently the following workflows available:
-- [Validate Gradle Wrapper](.github/workflows/gradle-wrapper-validation.yml) - Will check that the gradle wrapper has a valid checksum
-- [Pre Merge Checks](.github/workflows/pre-merge.yaml) - Will run the `preMerge` tasks as well as trying to run the Gradle plugin.
-- [Publish to Plugin Portal](.github/workflows/publish-plugin.yaml) - Will run the `publishPlugin` task when pushing a new tag.
+Both are wired through a [composite build](https://docs.gradle.org/current/userguide/composite_builds.html),
+so `./gradlew :example:linkDebugFrameworkIosSimulatorArm64` builds the plugin and uses it in one go.
 
-## Contributing 🤝
+## Status and limits
 
-Feel free to open a issue or submit a pull request for any bugs/improvements.
-
-## License 📄
-
-This template is licensed under the MIT License - see the [License](LICENSE) file for details.
-Please note that the generated template is offering to start with a MIT license but you can change it to whatever you wish, as long as you attribute under the MIT terms that you're using the template.
+- Requires macOS and a Kotlin/Native Apple target.
+- Framework binaries only; XCFrameworks and fat frameworks are not wired yet.
+- The `LinkerPhase` interception relies on Kotlin/Native internals; it is pinned to the Kotlin
+  version of `gradle/libs.versions.toml` and needs review on every Kotlin upgrade.

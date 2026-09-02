@@ -9,7 +9,8 @@ on:
       - '*'
 
 jobs:
-  gradle:
+  plugin:
+    name: Build and check the plugin
     runs-on: ubuntu-latest
     env:
       GRADLE_PUBLISH_KEY: ${{ secrets.GRADLE_PUBLISH_KEY }}
@@ -21,13 +22,23 @@ jobs:
       - name: Cache Gradle Caches
         uses: gradle/actions/setup-gradle@v4
       - name: Run Gradle tasks
-        run: ./gradlew preMerge --continue
+        run: ./gradlew -p plugin-build check validatePlugins --continue
 
-        # We do a run of the new task `templateExample` created by the plugin
-      - name: Run the plugin
-        run: ./gradlew templateExample --message="Test Run" --tag=CI
-        if: success()
-        # And we verify that the output of the file is correct.
-      - name: Verify the plugin output
-        run: grep -Fxq "[CI] Test Run" ./example/build/template-example.txt
-        if: success()
+  example:
+    name: Bundle Swift code into the example framework
+    runs-on: macos-latest
+    if: ${{ !contains(github.event.head_commit.message, 'ci skip') }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - name: Cache Gradle Caches
+        uses: gradle/actions/setup-gradle@v4
+      - name: Link the example framework
+        run: ./gradlew :example:linkDebugFrameworkIosSimulatorArm64
+      - name: Verify the Swift module was bundled into the framework
+        run: |
+          FRAMEWORK=example/build/bin/iosSimulatorArm64/debugFramework/ExampleKit.framework
+          test -f "$FRAMEWORK/Headers/ExampleKit-Swift.h"
+          test -f "$FRAMEWORK/Modules/ExampleKit.swiftmodule/arm64-apple-ios-simulator.swiftmodule"
+          grep -q "module ExampleKit.Swift" "$FRAMEWORK/Modules/module.modulemap"
+          nm -gU "$FRAMEWORK/ExampleKit" | grep -q "SwiftGreeter"

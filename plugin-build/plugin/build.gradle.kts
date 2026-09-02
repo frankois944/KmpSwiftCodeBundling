@@ -10,7 +10,21 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation(gradleApi())
 
+    // The Kotlin Gradle Plugin is provided by the consuming build, never bundled.
+    compileOnly(libs.kotlin.gradle.plugin)
+
     testImplementation(libs.junit)
+}
+
+tasks.processResources {
+    filesMatching("**/plugin.properties") {
+        expand(
+            mapOf(
+                "pluginGroup" to project.group.toString(),
+                "pluginVersion" to project.version.toString(),
+            ),
+        )
+    }
 }
 
 java {
@@ -33,7 +47,7 @@ gradlePlugin {
             description = property("DESCRIPTION").toString()
             displayName = property("DISPLAY_NAME").toString()
             // Note: tags cannot include "plugin" or "gradle" when publishing
-            tags.set(listOf("sample", "template"))
+            tags.set(listOf("kotlin", "multiplatform", "swift", "ios", "kmp"))
         }
     }
 }

@@ -31,6 +31,7 @@ develocity {
     }
 }
 
-rootProject.name = ("com.ncorti.kotlin.gradle.template")
+rootProject.name = ("io.github.frankois944.kmpSwiftCodeBundling")
 
 include(":plugin")
+include(":compiler-plugin")

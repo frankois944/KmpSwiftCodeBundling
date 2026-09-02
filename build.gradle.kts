@@ -1,8 +1,9 @@
 import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
-import io.gitlab.arturbosch.detekt.Detekt
+import dev.detekt.gradle.Detekt
 
 plugins {
     alias(libs.plugins.kotlin) apply false
+    alias(libs.plugins.kotlinMultiplatform) apply false
     alias(libs.plugins.detekt)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.versionCheck)
@@ -36,7 +37,9 @@ subprojects {
     }
 
     detekt {
-        config.setFrom(rootProject.files("config/detekt/detekt.yml"))
+        // detekt 2.0 rejects the 1.x config format: run `./gradlew detektGenerateConfig`
+        // to recreate config/detekt/detekt.yml. Until then detekt falls back to its defaults.
+        config.setFrom(rootProject.files("config/detekt/detekt.yml").filter { it.exists() })
     }
 }
 

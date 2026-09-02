@@ -1,4 +1,4 @@
-import io.gitlab.arturbosch.detekt.Detekt
+import dev.detekt.gradle.Detekt
 
 plugins {
     alias(libs.plugins.kotlin) apply false
@@ -39,7 +39,9 @@ allprojects {
     }
 
     detekt {
-        config.setFrom(rootProject.files("../config/detekt/detekt.yml"))
+        // detekt 2.0 rejects the 1.x config format: run `./gradlew detektGenerateConfig`
+        // to recreate config/detekt/detekt.yml. Until then detekt falls back to its defaults.
+        config.setFrom(rootProject.files("../config/detekt/detekt.yml").filter { it.exists() })
     }
 }
 

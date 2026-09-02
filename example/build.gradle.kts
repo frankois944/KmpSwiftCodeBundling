@@ -1,8 +1,21 @@
 plugins {
-    java
-    id("com.ncorti.kotlin.gradle.template.plugin")
+    alias(libs.plugins.kotlinMultiplatform)
+    id("io.github.frankois944.kmpSwiftCodeBundling")
 }
 
-templateExampleConfig {
-    message.set("Just trying this gradle plugin...")
+kotlin {
+    listOf(
+        iosArm64(),
+        iosSimulatorArm64(),
+    ).forEach { target ->
+        target.binaries.framework {
+            baseName = "ExampleKit"
+            isStatic = false
+        }
+    }
+}
+
+swiftCodeBundling {
+    swiftVersion.set("5")
+    produceDistributableFramework()
 }
