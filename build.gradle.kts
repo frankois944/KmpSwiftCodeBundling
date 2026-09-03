@@ -57,6 +57,7 @@ tasks.register("reformatAll") {
 
     dependsOn("ktlintFormat")
     dependsOn(gradle.includedBuild("plugin-build").task(":plugin:ktlintFormat"))
+    dependsOn(gradle.includedBuild("plugin-build").task(":compiler-plugin-kotlin-2.4:ktlintFormat"))
 }
 
 tasks.register("preMerge") {

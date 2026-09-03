@@ -14,6 +14,10 @@ internal object CompilerPluginArtifact {
     private const val RESOURCE_PATH = "/io/github/frankois944/kmpSwiftCodeBundling/plugin.properties"
     private const val ARTIFACT_PREFIX = "compiler-plugin-kotlin-"
 
+    private const val KOTLIN_MAJOR = 2
+    private const val OLDEST_SUPPORTED_MINOR = 2
+    private const val NEWEST_SUPPORTED_MINOR = 4
+
     private val properties: Properties by lazy {
         Properties().apply {
             val stream =
@@ -39,9 +43,9 @@ internal object CompilerPluginArtifact {
         val (major, minor) = parseVersion(kotlinVersion)
 
         return when {
-            major > 2 || (major == 2 && minor >= 4) -> "2.4"
-            major == 2 && minor == 3 -> "2.3"
-            major == 2 && minor == 2 -> "2.2"
+            major > KOTLIN_MAJOR || (major == KOTLIN_MAJOR && minor >= NEWEST_SUPPORTED_MINOR) -> "2.4"
+            major == KOTLIN_MAJOR && minor == NEWEST_SUPPORTED_MINOR - 1 -> "2.3"
+            major == KOTLIN_MAJOR && minor == OLDEST_SUPPORTED_MINOR -> "2.2"
             else ->
                 error(
                     "Kotlin $kotlinVersion is not supported by the KMP Swift code bundling plugin, which needs " +

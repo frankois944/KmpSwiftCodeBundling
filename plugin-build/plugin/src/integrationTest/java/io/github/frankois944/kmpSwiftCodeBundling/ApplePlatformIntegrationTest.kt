@@ -39,7 +39,10 @@ class ApplePlatformIntegrationTest {
 
         project.link()
 
-        assertTrue("Swift symbol missing from the framework binary", project.frameworkBinary.containsSymbol("PlatformGreeter"))
+        assertTrue(
+            "Swift symbol missing from the framework binary",
+            project.frameworkBinary.containsSymbol("PlatformGreeter"),
+        )
         assertTrue("missing ${project.swiftModule.name}", project.swiftModule.exists())
         assertTrue(project.swiftHeader.exists())
         assertTrue(

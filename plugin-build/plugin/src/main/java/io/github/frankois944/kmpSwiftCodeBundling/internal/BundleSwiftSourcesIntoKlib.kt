@@ -50,10 +50,14 @@ internal class BundleSwiftSourcesIntoKlib(
 
         if (target.isKlib) {
             target.writeToZip { fileSystem ->
-                sources.toPath().syncDirectoryContentIfDifferent(fileSystem.getPath("/${SwiftBundling.KLIB_SWIFT_DIRECTORY}"))
+                val bundled = fileSystem.getPath("/${SwiftBundling.KLIB_SWIFT_DIRECTORY}")
+
+                sources.toPath().syncDirectoryContentIfDifferent(bundled)
             }
         } else {
-            sources.toPath().syncDirectoryContentIfDifferent(target.toPath().resolve(SwiftBundling.KLIB_SWIFT_DIRECTORY))
+            sources.toPath().syncDirectoryContentIfDifferent(
+                target.toPath().resolve(SwiftBundling.KLIB_SWIFT_DIRECTORY),
+            )
         }
     }
 }

@@ -26,7 +26,7 @@ internal object SwiftBundlingConfigurationKeys {
         CompilerConfigurationKey.create(SwiftBundlingPluginIds.OPTION_FREE_COMPILER_ARGS)
 }
 
-internal class SwiftBundlingOptions(
+class SwiftBundlingOptions(
     val swiftSourcesDirectory: File,
     val workDirectory: File,
     val swiftVersion: String,

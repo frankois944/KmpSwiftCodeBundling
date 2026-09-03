@@ -24,9 +24,14 @@ package io.github.frankois944.kmpSwiftCodeBundling.internal
 
 internal fun lowerCamelCaseName(vararg nameParts: String?): String =
     nameParts
-        .filterNot { it.isNullOrEmpty() }
+        .filterNotNull()
+        .filter { it.isNotEmpty() }
         .mapIndexed { index, part ->
-            if (index == 0) part!!.replaceFirstChar { it.lowercase() } else part!!.replaceFirstChar { it.uppercase() }
+            if (index == 0) {
+                part.replaceFirstChar { it.lowercase() }
+            } else {
+                part.replaceFirstChar { it.uppercase() }
+            }
         }.joinToString("")
 
 /** Appends underscores until the identifier no longer collides with an already used one. */

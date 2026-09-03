@@ -109,7 +109,14 @@ class SwiftCodeBundlingIntegrationTest {
 
         project.link()
 
-        assertTrue("expected a static archive", project.frameworkBinary.readBytes().take(7).toByteArray().decodeToString() == "!<arch>")
+        assertTrue(
+            "expected a static archive",
+            project.frameworkBinary
+                .readBytes()
+                .take(7)
+                .toByteArray()
+                .decodeToString() == "!<arch>",
+        )
         assertTrue(project.frameworkBinary.containsSymbol("Greeter"))
     }
 

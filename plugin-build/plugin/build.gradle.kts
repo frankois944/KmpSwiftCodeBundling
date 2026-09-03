@@ -10,10 +10,11 @@ plugins {
 // The functional tests build a real Kotlin Multiplatform project, so the Kotlin Gradle Plugin has to
 // be on the classpath injected by `withPluginClasspath()` - it is only `compileOnly` for the plugin
 // itself, which must never bundle it.
-val functionalTestPluginClasspath: Configuration by configurations.creating {
-    isCanBeConsumed = false
-    isCanBeResolved = true
-}
+val functionalTestPluginClasspath: Configuration =
+    configurations.create("functionalTestPluginClasspath") {
+        isCanBeConsumed = false
+        isCanBeResolved = true
+    }
 
 dependencies {
     implementation(kotlin("stdlib"))
@@ -54,7 +55,12 @@ fun Test.configureIntegrationTest() {
 
     // The generated projects resolve the plugins the way a real consumer does, from a repository,
     // so they have to be published first.
-    dependsOn(":compiler-plugin:publishToMavenLocal", "publishToMavenLocal")
+    dependsOn(
+        ":compiler-plugin-kotlin-2.2:publishToMavenLocal",
+        ":compiler-plugin-kotlin-2.3:publishToMavenLocal",
+        ":compiler-plugin-kotlin-2.4:publishToMavenLocal",
+        "publishToMavenLocal",
+    )
 
     systemProperty("pluginVersion", project.version.toString())
     systemProperty("kotlinVersions", compilerVariantKotlinVersions.joinToString(","))
@@ -70,18 +76,21 @@ val compilerVariantKotlinVersions =
         libs.versions.kotlinCompiler24.get(),
     )
 
-val integrationTest by tasks.registering(Test::class) {
-    description = "Builds real Apple frameworks with the plugin. Requires macOS with Xcode."
-    configureIntegrationTest()
-    filter { excludeTestsMatching(kotlinVersionMatrixTestClass) }
-}
+val integrationTest =
+    tasks.register<Test>("integrationTest") {
+        description = "Builds real Apple frameworks with the plugin. Requires macOS with Xcode."
+        configureIntegrationTest()
+        filter { excludeTestsMatching(kotlinVersionMatrixTestClass) }
+    }
 
-val kotlinVersionTest by tasks.registering(Test::class) {
-    description = "Links a framework with every supported Kotlin version. Downloads one Kotlin/Native toolchain each."
-    configureIntegrationTest()
-    filter { includeTestsMatching(kotlinVersionMatrixTestClass) }
-    shouldRunAfter(integrationTest)
-}
+val kotlinVersionTest =
+    tasks.register<Test>("kotlinVersionTest") {
+        description =
+            "Links a framework with every supported Kotlin version. Downloads one Kotlin/Native toolchain each."
+        configureIntegrationTest()
+        filter { includeTestsMatching(kotlinVersionMatrixTestClass) }
+        shouldRunAfter(integrationTest)
+    }
 
 // The plugin has to know the coordinates of its companion compiler plugin at runtime, so they are
 // generated into a resource rather than hardcoded.
@@ -91,13 +100,14 @@ val kotlinVersionTest by tasks.registering(Test::class) {
 // on every Gradle sync. A generated resource directory is something it understands.
 val generatedPluginResources: Provider<Directory> = layout.buildDirectory.dir("generated/pluginResources")
 
-val generatePluginProperties by tasks.registering(WriteProperties::class) {
-    destinationFile.set(
-        generatedPluginResources.map { it.file("io/github/frankois944/kmpSwiftCodeBundling/plugin.properties") },
-    )
-    property("group", project.group.toString())
-    property("version", project.version.toString())
-}
+val generatePluginProperties =
+    tasks.register<WriteProperties>("generatePluginProperties") {
+        destinationFile.set(
+            generatedPluginResources.map { it.file("io/github/frankois944/kmpSwiftCodeBundling/plugin.properties") },
+        )
+        property("group", project.group.toString())
+        property("version", project.version.toString())
+    }
 
 sourceSets.named("main") {
     // `files(...).builtBy(...)` and not `map`/`flatMap` on the task provider: mapping to a provider

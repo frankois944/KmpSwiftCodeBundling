@@ -18,8 +18,8 @@
  *     SKIE/skie-gradle/plugin-impl/src/main/kotlin/co/touchlab/skie/plugin/switflink/SwiftBundlingConfigurator.kt
  *     SKIE/skie-gradle/plugin-impl/src/main/kotlin/co/touchlab/skie/plugin/switflink/SwiftUnpackingConfigurator.kt
  *
- * Changes made in this file: merged into one configurator that talks to the Kotlin Gradle Plugin directly instead of through
- * a version shim layer, and handles framework binaries only.
+ * Changes made in this file: merged into one configurator that talks to the Kotlin Gradle Plugin
+ * directly instead of through a version shim layer, and handles framework binaries only.
  */
 package io.github.frankois944.kmpSwiftCodeBundling.internal
 
@@ -33,13 +33,14 @@ import org.gradle.api.file.Directory
 import org.gradle.api.file.FileCollection
 import org.gradle.api.provider.Provider
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
-import org.jetbrains.kotlin.gradle.plugin.getKotlinPluginVersion
 import org.jetbrains.kotlin.gradle.plugin.SubpluginOption
+import org.jetbrains.kotlin.gradle.plugin.getKotlinPluginVersion
 import org.jetbrains.kotlin.gradle.plugin.mpp.Framework
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeCompilation
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFrameworkTask
 import org.jetbrains.kotlin.gradle.tasks.FatFrameworkTask
+import org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink
 
 internal class SwiftCodeBundlingConfigurator(
     private val project: Project,
@@ -172,7 +173,6 @@ internal class SwiftCodeBundlingConfigurator(
 
         val swiftSourcesDirectory = binaryDirectory.map { it.dir("swift") }
         val workDirectory = binaryDirectory.map { it.dir("work") }
-
         val taskName = lowerCamelCaseName("unpackSwiftSources", framework.name, framework.target.targetName)
 
         // An XCFramework is consumed from another machine and possibly another Swift compiler, so
@@ -205,43 +205,11 @@ internal class SwiftCodeBundlingConfigurator(
                 listOfNotNull(linkTask.compilerPluginClasspath, compilerPluginConfiguration)
                     .reduce(FileCollection::plus)
 
-            linkTask.compilerPluginOptions.addPluginArgument(
-                SwiftBundling.COMPILER_PLUGIN_ID,
-                SubpluginOption(SwiftBundling.OPTION_SWIFT_SOURCES_DIR, swiftSourcesDirectory.get().asFile.absolutePath),
+            linkTask.addSwiftBundlingOptions(
+                swiftSourcesDirectory = swiftSourcesDirectory.get().asFile.absolutePath,
+                workDirectory = workDirectory.get().asFile.absolutePath,
+                libraryEvolution = libraryEvolution,
             )
-            linkTask.compilerPluginOptions.addPluginArgument(
-                SwiftBundling.COMPILER_PLUGIN_ID,
-                SubpluginOption(SwiftBundling.OPTION_WORK_DIR, workDirectory.get().asFile.absolutePath),
-            )
-            linkTask.compilerPluginOptions.addPluginArgument(
-                SwiftBundling.COMPILER_PLUGIN_ID,
-                SubpluginOption(SwiftBundling.OPTION_SWIFT_VERSION, extension.swiftVersion.get()),
-            )
-            linkTask.compilerPluginOptions.addPluginArgument(
-                SwiftBundling.COMPILER_PLUGIN_ID,
-                SubpluginOption(SwiftBundling.OPTION_SWIFT_LIBRARY_EVOLUTION, libraryEvolution.toString()),
-            )
-            linkTask.compilerPluginOptions.addPluginArgument(
-                SwiftBundling.COMPILER_PLUGIN_ID,
-                SubpluginOption(
-                    SwiftBundling.OPTION_NO_CLANG_MODULE_BREADCRUMBS,
-                    extension.noClangModuleBreadcrumbsInStaticFrameworks.get().toString(),
-                ),
-            )
-            linkTask.compilerPluginOptions.addPluginArgument(
-                SwiftBundling.COMPILER_PLUGIN_ID,
-                SubpluginOption(
-                    SwiftBundling.OPTION_RELATIVE_SOURCE_PATHS,
-                    extension.enableRelativeSourcePathsInDebugSymbols.get().toString(),
-                ),
-            )
-
-            extension.freeSwiftCompilerArgs.get().forEach { argument ->
-                linkTask.compilerPluginOptions.addPluginArgument(
-                    SwiftBundling.COMPILER_PLUGIN_ID,
-                    SubpluginOption(SwiftBundling.OPTION_FREE_COMPILER_ARGS, argument),
-                )
-            }
 
             if (extension.enableRelativeSourcePathsInDebugSymbols.get()) {
                 // The Kotlin half of the same feature: without it only the Swift sources would have
@@ -249,6 +217,33 @@ internal class SwiftCodeBundlingConfigurator(
                 linkTask.toolOptions.freeCompilerArgs.add("-Xdebug-prefix-map=${project.rootDir.absolutePath}=.")
             }
         }
+    }
+
+    /** Hands the compiler plugin everything it needs, as `-P` options on the link task. */
+    private fun KotlinNativeLink.addSwiftBundlingOptions(
+        swiftSourcesDirectory: String,
+        workDirectory: String,
+        libraryEvolution: Boolean,
+    ) {
+        fun option(
+            key: String,
+            value: String,
+        ) = compilerPluginOptions.addPluginArgument(SwiftBundling.COMPILER_PLUGIN_ID, SubpluginOption(key, value))
+
+        option(SwiftBundling.OPTION_SWIFT_SOURCES_DIR, swiftSourcesDirectory)
+        option(SwiftBundling.OPTION_WORK_DIR, workDirectory)
+        option(SwiftBundling.OPTION_SWIFT_VERSION, extension.swiftVersion.get())
+        option(SwiftBundling.OPTION_SWIFT_LIBRARY_EVOLUTION, libraryEvolution.toString())
+        option(
+            SwiftBundling.OPTION_NO_CLANG_MODULE_BREADCRUMBS,
+            extension.noClangModuleBreadcrumbsInStaticFrameworks.get().toString(),
+        )
+        option(
+            SwiftBundling.OPTION_RELATIVE_SOURCE_PATHS,
+            extension.enableRelativeSourcePathsInDebugSymbols.get().toString(),
+        )
+
+        extension.freeSwiftCompilerArgs.get().forEach { option(SwiftBundling.OPTION_FREE_COMPILER_ARGS, it) }
     }
 
     private companion object {

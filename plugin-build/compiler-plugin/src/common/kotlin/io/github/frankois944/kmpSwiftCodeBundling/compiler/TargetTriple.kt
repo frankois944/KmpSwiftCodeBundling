@@ -21,7 +21,7 @@
  */
 package io.github.frankois944.kmpSwiftCodeBundling.compiler
 
-internal data class TargetTriple(
+data class TargetTriple(
     val architecture: String,
     val vendor: String,
     val os: String,

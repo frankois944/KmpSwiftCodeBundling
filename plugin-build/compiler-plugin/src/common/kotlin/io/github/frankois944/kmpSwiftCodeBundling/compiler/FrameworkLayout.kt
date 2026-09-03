@@ -17,7 +17,8 @@
  * Based on:
  *     SKIE/common/util/src/main/kotlin/co/touchlab/skie/util/directory/FrameworkLayout.kt
  *
- * Changes made in this file: trimmed to the paths this plugin reads and writes; directories are no longer created on access.
+ * Changes made in this file: trimmed to the paths this plugin reads and writes; directories are
+ * no longer created on access.
  */
 package io.github.frankois944.kmpSwiftCodeBundling.compiler
 
@@ -27,7 +28,7 @@ import java.io.File
  * Paths inside a `.framework` bundle. macOS frameworks are versioned bundles, every other Apple
  * platform uses a flat one.
  */
-internal class FrameworkLayout(
+class FrameworkLayout(
     val frameworkDirectory: File,
     isMacosFramework: Boolean,
     isFlat: Boolean = false,

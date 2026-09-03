@@ -33,6 +33,7 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import org.gradle.work.DisableCachingByDefault
 import java.io.File
 import javax.inject.Inject
 
@@ -41,6 +42,7 @@ import javax.inject.Inject
  * then stored inside the compilation's klib.
  */
 @Suppress("AbstractClassCanBeConcreteClass")
+@DisableCachingByDefault(because = "Copies a handful of local files; a cache round trip would cost more than the work.")
 abstract class ProcessSwiftSourcesTask : DefaultTask() {
     init {
         description = "Collects the Swift sources bundled with this compilation."

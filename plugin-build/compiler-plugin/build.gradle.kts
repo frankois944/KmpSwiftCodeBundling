@@ -1,3 +1,4 @@
+import dev.detekt.gradle.Detekt
 import org.gradle.api.file.SourceDirectorySet
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -8,81 +9,78 @@ plugins {
 }
 
 /**
- * The plugin is loaded inside the Kotlin/Native compiler and uses its internal API, so a jar built
- * against one Kotlin version will not run inside another. The same sources are therefore compiled
- * once per supported Kotlin version and published as separate artifacts; the Gradle plugin picks the
- * matching one from the Kotlin version of the consuming build.
+ * The compiler plugin is loaded inside the Kotlin/Native compiler and uses its internal API, so a
+ * jar built against one Kotlin version will not run inside another. The same sources are therefore
+ * compiled once per supported Kotlin version and published as separate artifacts; the Gradle plugin
+ * picks the matching one from the Kotlin version of the consuming build.
  *
- * `src/common` holds everything; `src/compat-*` only the handful of names JetBrains renamed.
+ * This project - `:compiler-plugin-kotlin-2.4`, whose directory is deliberately named after no
+ * Kotlin version - owns the sources, the tests and the linter configuration, and builds the newest
+ * supported version. The older ones are `:compiler-plugin-kotlin-2.2` and
+ * `:compiler-plugin-kotlin-2.3`, which point their source directories back here.
+ *
+ * One project per published artifact, each named after the module it publishes, is not a matter of
+ * taste: that name is how a composite build maps the module back to the project, and it is how
+ * `:example` resolves the compiler plugin from the included build instead of from a repository.
  */
-data class CompilerVariant(
-    val name: String,
-    val kotlinVersion: String,
-    val compatDirectories: List<String>,
-)
-
-// Two independent breaking changes, at two different versions: `pluginId` became an abstract member
-// of CompilerPluginRegistrar in 2.3, and the Kotlin/Native config types were renamed in 2.4. Keeping
-// them on separate axes avoids repeating either one.
-val compilerVariants =
-    listOf(
-        CompilerVariant("2.2", libs.versions.kotlinCompiler22.get(), listOf("konan-2.2", "registrar-2.2")),
-        CompilerVariant("2.3", libs.versions.kotlinCompiler23.get(), listOf("konan-2.2", "registrar-2.3")),
-        CompilerVariant("2.4", libs.versions.kotlinCompiler24.get(), listOf("konan-2.4", "registrar-2.3")),
-    )
+val kotlinCompilerVersion = libs.versions.kotlinCompiler24.get()
+val artifactName = "compiler-plugin-kotlin-2.4"
 
 /** KGP adds a `kotlin` source directory set to every Java source set, without a typed accessor. */
 val SourceSet.kotlinSources: SourceDirectorySet
     get() = (this as ExtensionAware).extensions.getByName("kotlin") as SourceDirectorySet
 
-// Nothing is built from `main`: every variant is its own source set.
+// `src/common` holds everything; the compat directories only the handful of names JetBrains renamed.
+// Two independent axes: the registrar changed in 2.3, the Kotlin/Native config types in 2.4.
 sourceSets.named("main") {
-    kotlinSources.setSrcDirs(emptyList<String>())
+    kotlinSources.setSrcDirs(
+        listOf(
+            "src/common/kotlin",
+            "src/konan-2.4/kotlin",
+            "src/registrar-2.3/kotlin",
+        ),
+    )
     java.setSrcDirs(emptyList<String>())
-    resources.setSrcDirs(emptyList<String>())
+    resources.setSrcDirs(listOf("src/common/resources"))
 }
 
-// ...so its jar would be an empty artifact sitting next to the real ones.
-tasks.named<Jar>("jar") { enabled = false }
+base.archivesName.set(artifactName)
 
-compilerVariants.forEach { variant ->
-    val sourceSet = sourceSets.create("kotlin${variant.name.replace(".", "")}")
+dependencies {
+    // Both are provided by the Kotlin/Native compiler at run time; nothing may be bundled.
+    compileOnly(kotlin("stdlib"))
+    compileOnly("org.jetbrains.kotlin:kotlin-native-compiler-embeddable:$kotlinCompilerVersion")
 
-    sourceSet.kotlinSources.setSrcDirs(
-        listOf("src/common/kotlin") + variant.compatDirectories.map { "src/$it/kotlin" },
-    )
-    sourceSet.java.setSrcDirs(emptyList<String>())
-    sourceSet.resources.setSrcDirs(listOf("src/common/resources"))
+    testImplementation(libs.junit)
+    testImplementation("org.jetbrains.kotlin:kotlin-native-compiler-embeddable:$kotlinCompilerVersion")
+}
 
-    dependencies {
-        // Both are provided by the Kotlin/Native compiler at run time; nothing may be bundled.
-        add(sourceSet.compileOnlyConfigurationName, kotlin("stdlib"))
-        add(
-            sourceSet.compileOnlyConfigurationName,
-            "org.jetbrains.kotlin:kotlin-native-compiler-embeddable:${variant.kotlinVersion}",
-        )
-    }
-
-    val artifact = "compiler-plugin-kotlin-${variant.name}"
-
-    val jarTask =
-        tasks.register<Jar>("${sourceSet.name}Jar") {
-            description = "Builds the compiler plugin for Kotlin ${variant.name}."
-            archiveBaseName.set(artifact)
-            from(sourceSet.output)
-        }
-
-    tasks.named("assemble") { dependsOn(jarTask) }
-
-    publishing.publications.register<MavenPublication>(sourceSet.name) {
-        artifactId = artifact
-        artifact(jarTask)
-    }
+// Eager `create`, so the publication exists as soon as the project is configured rather than
+// when the task graph first asks for it.
+publishing.publications.create<MavenPublication>("compilerPlugin") {
+    artifactId = artifactName
+    from(components["java"])
 }
 
 java {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
+}
+
+// The compat directories of the older variants belong to no source set here, so detekt would never
+// look at them - which is how seventeen over-long lines got in unnoticed. This task has no type
+// resolution, so analysing sources written against three different Kotlin versions is fine.
+tasks.withType<Detekt>().configureEach {
+    setSource(
+        files(
+            "src/common/kotlin",
+            "src/konan-2.2/kotlin",
+            "src/konan-2.4/kotlin",
+            "src/registrar-2.2/kotlin",
+            "src/registrar-2.3/kotlin",
+            "src/test/kotlin",
+        ),
+    )
 }
 
 tasks.withType<KotlinCompile>().configureEach {

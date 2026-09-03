@@ -17,7 +17,8 @@
  * Based on:
  *     SKIE/skie-gradle/plugin-impl/src/main/kotlin/co/touchlab/skie/plugin/switflink/UnpackSwiftSourcesTask.kt
  *
- * Changes made in this file: takes a file collection rather than a serialized dependency list, and prunes empty directories.
+ * Changes made in this file: takes a file collection rather than a serialized dependency list,
+ * and prunes empty directories.
  */
 package io.github.frankois944.kmpSwiftCodeBundling
 
@@ -36,6 +37,7 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import org.gradle.work.DisableCachingByDefault
 import java.io.File
 import javax.inject.Inject
 
@@ -46,6 +48,7 @@ import javax.inject.Inject
  * every file of a module to have a unique name.
  */
 @Suppress("AbstractClassCanBeConcreteClass")
+@DisableCachingByDefault(because = "Unpacks local klibs; a cache round trip would cost more than the work.")
 abstract class UnpackSwiftSourcesTask : DefaultTask() {
     init {
         description = "Extracts the bundled Swift sources from the klibs linked into this binary."
@@ -115,7 +118,9 @@ abstract class UnpackSwiftSourcesTask : DefaultTask() {
 
                 val prefix = if (basePath.isEmpty()) "" else basePath.replace("/", ".") + "."
 
-                details.relativePath = RelativePath(true, "$uniqueName/$basePath/bundled.$uniqueName.$prefix${details.name}")
+                val fileName = "bundled.$uniqueName.$prefix${details.name}"
+
+                details.relativePath = RelativePath(true, "$uniqueName/$basePath/$fileName")
             }
 
             it.into(staging)

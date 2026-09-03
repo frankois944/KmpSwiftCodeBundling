@@ -17,8 +17,8 @@
  * Based on:
  *     SKIE/common/util/src/main/kotlin/co/touchlab/skie/util/Command.kt
  *
- * Changes made in this file: reduced to a single blocking invocation. The SKIE original is itself derived from the Kotlin
- * compiler, Copyright 2010-2017 JetBrains s.r.o., also under the Apache License 2.0.
+ * Changes made in this file: reduced to a single blocking invocation. The SKIE original is itself
+ * derived from the Kotlin compiler, Copyright 2010-2017 JetBrains s.r.o., also under Apache 2.0.
  */
 package io.github.frankois944.kmpSwiftCodeBundling.compiler
 
@@ -47,7 +47,8 @@ internal class Command(
 
         if (exitCode != 0) {
             error(
-                "The Swift compiler returned a non-zero exit code ($exitCode) while compiling the bundled Swift code.\n" +
+                "The Swift compiler returned a non-zero exit code ($exitCode) while compiling " +
+                    "the bundled Swift code.\n" +
                     "Command: ${arguments.joinToString(" ")}\n" +
                     "Output:\n$output",
             )

@@ -35,7 +35,8 @@ internal fun File.writeToZip(write: (FileSystem) -> Unit) {
     val fileUri = toURI()
 
     // Rebuilding the URI component by component keeps paths containing spaces working.
-    val uri = URI("jar:file", fileUri.userInfo, fileUri.host, fileUri.port, fileUri.path, fileUri.query, fileUri.fragment)
+    val uri =
+        URI("jar:file", fileUri.userInfo, fileUri.host, fileUri.port, fileUri.path, fileUri.query, fileUri.fragment)
 
     val fileSystem =
         try {

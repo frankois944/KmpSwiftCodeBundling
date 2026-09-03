@@ -1,5 +1,5 @@
 [versions]
-detekt = "2.0.0-alpha.0"
+detekt = "2.0.0-alpha.6"
 kotlin = "2.4.10"
 # One compiler-plugin artifact is built per Kotlin version, against the latest patch of each.
 kotlinCompiler22 = "2.2.21"

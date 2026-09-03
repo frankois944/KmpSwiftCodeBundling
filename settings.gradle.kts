@@ -28,4 +28,10 @@ develocity {
 rootProject.name = "KmpSwiftCodeBundling"
 
 include(":example")
+
+// `plugin-build` contributes both the Gradle plugin and the compiler-plugin artifacts to `:example`.
+// No explicit `dependencySubstitution` here on purpose: declaring one turns the automatic
+// substitution off, and with it the lookup that lets `:example` apply the plugin by id at all.
+// The mapping works because every project of the included build is named after the module it
+// publishes - see `plugin-build/settings.gradle.kts`.
 includeBuild("plugin-build")

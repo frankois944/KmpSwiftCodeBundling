@@ -15,11 +15,12 @@
  * limitations under the License.
  *
  * Based on:
- *     SKIE/kotlin-compiler/linker-plugin/src/2.1.20/kotlin/co/touchlab/skie/compilerinject/interceptor/SimpleNamedPhaseInterceptorConfigurer.kt
- *     SKIE/kotlin-compiler/linker-plugin/src/main/kotlin/co/touchlab/skie/compilerinject/interceptor/PhaseInterceptorRegistrar.kt
- *     SKIE/kotlin-compiler/linker-plugin/src/main/kotlin/co/touchlab/skie/compilerinject/interceptor/ErasedPhaseInterceptorChain.kt
+ *     SKIE .../compilerinject/interceptor/SimpleNamedPhaseInterceptorConfigurer.kt (src/2.1.20)
+ *     SKIE .../compilerinject/interceptor/PhaseInterceptorRegistrar.kt (src/main)
+ *     SKIE .../compilerinject/interceptor/ErasedPhaseInterceptorChain.kt (src/main)
  *
- * Changes made in this file: reduced to a single type-erased implementation covering two phases, dropping the ServiceLoader
+ * Changes made in this file: reduced to a single type-erased implementation covering two phases,
+ * dropping the ServiceLoader SPI, the interceptor chain and the Reflector helper.
  * SPI, the interceptor chain and the Reflector helper.
  */
 package io.github.frankois944.kmpSwiftCodeBundling.compiler
@@ -85,7 +86,8 @@ internal object PhaseBodyInterception {
         configuration.put(key, interceptor)
     }
 
-    private fun Any?.isAlreadyIntercepted(): Boolean = this != null && javaClass.name == InterceptedPhaseBody::class.java.name
+    private fun Any?.isAlreadyIntercepted(): Boolean =
+        this != null && javaClass.name == InterceptedPhaseBody::class.java.name
 
     private fun Any.readInterceptorKey(): CompilerConfigurationKey<ErasedPhaseInterceptor> {
         val keyField = javaClass.getDeclaredField(INTERCEPTOR_KEY_FIELD_NAME).also { it.isAccessible = true }

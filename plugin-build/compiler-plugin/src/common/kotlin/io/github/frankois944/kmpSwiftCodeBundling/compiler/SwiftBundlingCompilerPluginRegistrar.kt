@@ -33,10 +33,12 @@ class SwiftBundlingCompilerPluginRegistrar : BaseSwiftBundlingRegistrar() {
                 swiftSourcesDirectory = swiftSourcesDirectory,
                 workDirectory = workDirectory,
                 swiftVersion = configuration.get(SwiftBundlingConfigurationKeys.SWIFT_VERSION) ?: DEFAULT_SWIFT_VERSION,
-                swiftLibraryEvolution = configuration.get(SwiftBundlingConfigurationKeys.SWIFT_LIBRARY_EVOLUTION) ?: false,
+                swiftLibraryEvolution =
+                    configuration.get(SwiftBundlingConfigurationKeys.SWIFT_LIBRARY_EVOLUTION) ?: false,
                 noClangModuleBreadcrumbsInStaticFrameworks =
                     configuration.get(SwiftBundlingConfigurationKeys.NO_CLANG_MODULE_BREADCRUMBS) ?: false,
-                relativeSourcePathsInDebugSymbols = configuration.get(SwiftBundlingConfigurationKeys.RELATIVE_SOURCE_PATHS) ?: false,
+                relativeSourcePathsInDebugSymbols =
+                    configuration.get(SwiftBundlingConfigurationKeys.RELATIVE_SOURCE_PATHS) ?: false,
                 freeCompilerArgs = configuration.get(SwiftBundlingConfigurationKeys.FREE_COMPILER_ARGS).orEmpty(),
             )
 

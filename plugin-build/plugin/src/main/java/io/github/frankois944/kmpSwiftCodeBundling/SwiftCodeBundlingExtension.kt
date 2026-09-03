@@ -16,10 +16,10 @@
  *
  * Based on:
  *     SKIE/skie-gradle/plugin-api/src/main/kotlin/co/touchlab/skie/plugin/configuration/SkieBuildConfiguration.kt
- *     SKIE/skie-gradle/plugin-api/src/main/kotlin/co/touchlab/skie/plugin/configuration/SkieSwiftBundlingConfiguration.kt
+ *     SKIE .../plugin/configuration/SkieSwiftBundlingConfiguration.kt (skie-gradle/plugin-api)
  *
- * Changes made in this file: flattened into a single extension, keeping only the options that apply to Swift code bundling;
- * the documentation of each option is adapted from the SKIE originals.
+ * Changes made in this file: flattened into a single extension, keeping only the options that
+ * apply to Swift code bundling; the documentation of each option is adapted from the SKIE originals.
  */
 package io.github.frankois944.kmpSwiftCodeBundling
 
@@ -74,7 +74,8 @@ abstract class SwiftCodeBundlingExtension
             objects.property(Boolean::class.java).convention(false)
 
         /** Extra arguments appended to the `swiftc` invocation. */
-        val freeSwiftCompilerArgs: ListProperty<String> = objects.listProperty(String::class.java).convention(emptyList())
+        val freeSwiftCompilerArgs: ListProperty<String> =
+            objects.listProperty(String::class.java).convention(emptyList())
 
         /**
          * Configures the plugin to produce a framework that can be compiled against on another

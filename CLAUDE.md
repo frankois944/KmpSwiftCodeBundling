@@ -27,7 +27,8 @@ it is `example/`.
 
 - `plugin-build/plugin` — the Gradle plugin. Sources are under `src/main/java/` (template quirk,
   not Java). Depends on the Kotlin Gradle Plugin as `compileOnly`.
-- `plugin-build/compiler-plugin` — a Kotlin/Native **compiler** plugin, loaded inside the compiler.
+- `plugin-build/compiler-plugin` — a Kotlin/Native **compiler** plugin, loaded inside the compiler
+  (project `:compiler-plugin-kotlin-2.4`).
   It must never see a Gradle class; `kotlin-native-compiler-embeddable` and the stdlib are
   `compileOnly` so nothing is bundled.
 - `example` — KMP module producing the `ExampleKit` framework for `iosArm64`, `iosSimulatorArm64`
@@ -38,9 +39,15 @@ Tests come in three layers, all under `plugin-build/plugin`:
 
 | Task | What it covers | Where it runs |
 | --- | --- | --- |
-| `test` | Unit tests and TestKit functional tests | any host |
+| `-p plugin-build :compiler-plugin-kotlin-2.4:test` | The pure parts of the compiler plugin — output file map, module map, stale intermediates, framework layout, target triple | any host |
+| `test` | Unit tests and TestKit functional tests of the Gradle plugin | any host |
 | `integrationTest` | Links real Apple frameworks, four platforms, static, XCFramework, incremental | macOS with Xcode |
 | `kotlinVersionTest` | Links with every supported Kotlin version | macOS, downloads one Kotlin/Native toolchain per version, CI runs it on `main` only |
+
+The compiler plugin's own tests compile against one variant (the newest); the tested code is
+identical in all of them. The logic they cover is deliberately extracted into `SwiftOutputFileMap`,
+`BundledSwiftModuleMap` and `SwiftIntermediates` so it can be tested without a compiler — three past
+bugs lived there.
 
 `kotlinVersionTest` is the only one that resolves the plugins from a repository instead of the
 classpath TestKit injects — the only way to vary the Kotlin version, and the same path a consumer
@@ -141,16 +148,27 @@ run inside another — source compatibility is not enough. The same sources are 
 Kotlin version and published as separate artifacts:
 
 - `plugin-build/compiler-plugin/src/common` — everything.
-- `plugin-build/compiler-plugin/src/compat-2.2` and `src/compat-2.4` — only the names JetBrains
-  renamed, as typealiases. 2.2 and 2.3 share the 2.2 compat file.
-- `compiler-plugin/build.gradle.kts` loops over `compilerVariants`, creating one source set, one jar
-  and one publication each (`compiler-plugin-kotlin-2.2`, `-2.3`, `-2.4`).
+- `src/konan-2.2`, `src/konan-2.4`, `src/registrar-2.2`, `src/registrar-2.3` — only the names
+  JetBrains renamed, as typealiases. Two independent axes: the registrar changed in 2.3, the
+  Kotlin/Native config types in 2.4.
+- One Gradle project per published artifact, **named exactly after the module it publishes**:
+  `:compiler-plugin-kotlin-2.4` (directory `plugin-build/compiler-plugin`, deliberately neutral)
+  owns the sources, the tests and the detekt/ktlint configuration; `:compiler-plugin-kotlin-2.2` and
+  `:compiler-plugin-kotlin-2.3` point their source directories back at it and compile the same files
+  against an older compiler. Their linter tasks are disabled, so the shared files are never read by
+  two projects at once.
+- **Why projects, and why those names:** a composite build maps a module to a project by name. With
+  the three variants as source sets of one project, `:example` could not resolve
+  `compiler-plugin-kotlin-2.4` from the included build and went looking for it on Maven Central.
+  Do not declare an explicit `dependencySubstitution` in the root `settings.gradle.kts` to work
+  around that: declaring one disables the automatic substitution, and with it the lookup that lets
+  `:example` apply the Gradle plugin by id.
 - `CompilerPluginArtifact` on the Gradle side maps `project.getKotlinPluginVersion()` to a variant;
   anything newer than the last known one falls back to it.
 
-Adding a Kotlin version means: a catalog entry, a line in `compilerVariants`, a branch in
-`CompilerPluginArtifact.variantFor`, and a new `src/compat-*` directory only if something was
-renamed. What changed so far:
+Adding a Kotlin version means: a catalog entry, a new project (copy the newest one, move the
+sources of the previous newest into it), a branch in `CompilerPluginArtifact.variantFor`, and a new
+compat directory only if something was renamed. What changed so far:
 
 | API | Change |
 | --- | --- |
