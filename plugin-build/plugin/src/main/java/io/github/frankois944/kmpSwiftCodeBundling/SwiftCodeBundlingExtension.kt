@@ -1,3 +1,26 @@
+/*
+ * Derived from SKIE (https://github.com/touchlab/SKIE)
+ * Copyright 2023 Touchlab, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Based on:
+ *     SKIE/skie-gradle/plugin-api/src/main/kotlin/co/touchlab/skie/plugin/configuration/SkieBuildConfiguration.kt
+ *     SKIE .../plugin/configuration/SkieSwiftBundlingConfiguration.kt (skie-gradle/plugin-api)
+ *
+ * Changes made in this file: flattened into a single extension, keeping only the options that
+ * apply to Swift code bundling; the documentation of each option is adapted from the SKIE originals.
+ */
 package io.github.frankois944.kmpSwiftCodeBundling
 
 import org.gradle.api.model.ObjectFactory
@@ -21,8 +44,10 @@ abstract class SwiftCodeBundlingExtension
          * Enables Swift library evolution.
          *
          * Building with library evolution increases compilation time, so use it only when the
-         * framework is compiled against on another machine - notably when it is distributed inside
-         * an XCFramework.
+         * framework is compiled against on another machine.
+         *
+         * Frameworks assembled into an XCFramework always get library evolution, whatever this is
+         * set to, because an XCFramework is consumed from another machine by definition.
          */
         val enableSwiftLibraryEvolution: Property<Boolean> = objects.property(Boolean::class.java).convention(false)
 
@@ -49,7 +74,8 @@ abstract class SwiftCodeBundlingExtension
             objects.property(Boolean::class.java).convention(false)
 
         /** Extra arguments appended to the `swiftc` invocation. */
-        val freeSwiftCompilerArgs: ListProperty<String> = objects.listProperty(String::class.java).convention(emptyList())
+        val freeSwiftCompilerArgs: ListProperty<String> =
+            objects.listProperty(String::class.java).convention(emptyList())
 
         /**
          * Configures the plugin to produce a framework that can be compiled against on another

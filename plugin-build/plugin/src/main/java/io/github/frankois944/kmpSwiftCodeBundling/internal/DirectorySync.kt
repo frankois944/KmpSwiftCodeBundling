@@ -1,3 +1,26 @@
+/*
+ * Derived from SKIE (https://github.com/touchlab/SKIE)
+ * Copyright 2023 Touchlab, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Based on:
+ *     SKIE/common/util/src/main/kotlin/co/touchlab/skie/util/cache/DirectorySyncDifferences.kt
+ *     SKIE/common/util/src/main/kotlin/co/touchlab/skie/util/cache/FileCopyToIfDifferent.kt
+ *
+ * Changes made in this file: merged and made sequential, comparing file contents directly; the
+ * empty-directory pruning is new.
+ */
 package io.github.frankois944.kmpSwiftCodeBundling.internal
 
 import java.nio.file.Files
@@ -26,7 +49,8 @@ internal fun Path.syncDirectoryContentIfDifferent(destination: Path) {
     val originEntries = listDirectoryEntries()
     val originNames = originEntries.map { it.name }.toSet()
 
-    destination.listDirectoryEntries()
+    destination
+        .listDirectoryEntries()
         .filter { it.name !in originNames }
         .forEach { it.deleteRecursivelyIfExists() }
 
@@ -50,7 +74,8 @@ private fun Path.copyFileToIfDifferent(destination: Path) {
     Files.copy(this, destination, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
 }
 
-private fun Path.readAllBytesEqual(other: Path): Boolean = Files.readAllBytes(this).contentEquals(Files.readAllBytes(other))
+private fun Path.readAllBytesEqual(other: Path): Boolean =
+    Files.readAllBytes(this).contentEquals(Files.readAllBytes(other))
 
 private fun Path.deleteRecursivelyIfExists() {
     if (isDirectory()) {

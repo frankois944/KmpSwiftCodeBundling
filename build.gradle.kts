@@ -1,4 +1,3 @@
-import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
 import dev.detekt.gradle.Detekt
 
 plugins {
@@ -6,7 +5,6 @@ plugins {
     alias(libs.plugins.kotlinMultiplatform) apply false
     alias(libs.plugins.detekt)
     alias(libs.plugins.ktlint)
-    alias(libs.plugins.versionCheck)
 }
 
 subprojects {
@@ -50,14 +48,6 @@ tasks.withType<Detekt>().configureEach {
     }
 }
 
-tasks.withType<DependencyUpdatesTask> {
-    rejectVersionIf {
-        candidate.version.isNonStable()
-    }
-}
-
-fun String.isNonStable() = "^[0-9,.v-]+(-r)?$".toRegex().matches(this).not()
-
 tasks.register("clean", Delete::class.java) {
     delete(rootProject.layout.buildDirectory)
 }
@@ -67,6 +57,7 @@ tasks.register("reformatAll") {
 
     dependsOn("ktlintFormat")
     dependsOn(gradle.includedBuild("plugin-build").task(":plugin:ktlintFormat"))
+    dependsOn(gradle.includedBuild("plugin-build").task(":compiler-plugin-kotlin-2.4:ktlintFormat"))
 }
 
 tasks.register("preMerge") {

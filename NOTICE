@@ -1,0 +1,41 @@
+KmpSwiftCodeBundling
+Copyright (c) 2026 François Dabonot
+
+This product includes software derived from SKIE.
+
+    SKIE
+    https://github.com/touchlab/SKIE
+    Copyright 2023 Touchlab, Inc.
+    Licensed under the Apache License, Version 2.0
+
+A copy of the Apache License, Version 2.0 is included at
+licenses/LICENSE-Apache-2.0.txt and is also available at
+http://www.apache.org/licenses/LICENSE-2.0
+
+The Swift code bundling feature reimplemented here, and several of the
+supporting utilities, follow SKIE's design and in places its code. Every file
+containing derived code carries a header naming the SKIE source files it is
+based on and stating how it was changed. The files concerned are:
+
+    plugin-build/compiler-plugin/src/main/kotlin/io/github/frankois944/kmpSwiftCodeBundling/compiler/
+        Command.kt
+        FrameworkLayout.kt
+        PhaseBodyInterception.kt
+        RelativeSourcePathsWorkaround.kt
+        SwiftBundlingLinkerStep.kt
+        TargetTriple.kt
+
+    plugin-build/plugin/src/main/java/io/github/frankois944/kmpSwiftCodeBundling/
+        ProcessSwiftSourcesTask.kt
+        SwiftCodeBundlingExtension.kt
+        UnpackSwiftSourcesTask.kt
+        internal/BundleSwiftSourcesIntoKlib.kt
+        internal/DirectorySync.kt
+        internal/Names.kt
+        internal/SwiftCodeBundlingConfigurator.kt
+        internal/Zip.kt
+
+SKIE's Command.kt is itself derived from the Kotlin compiler,
+Copyright 2010-2017 JetBrains s.r.o., also under the Apache License 2.0.
+
+This project is not affiliated with or endorsed by Touchlab.

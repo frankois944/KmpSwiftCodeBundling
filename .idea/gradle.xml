@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="GradleMigrationSettings" migrationVersion="1" />
   <component name="GradleSettings">
     <option name="linkedExternalProjectsSettings">
       <GradleProjectSettings>
@@ -10,6 +11,8 @@
                 <projects>
                   <project path="$PROJECT_DIR$/plugin-build" />
                   <project path="$PROJECT_DIR$/plugin-build/compiler-plugin" />
+                  <project path="$PROJECT_DIR$/plugin-build/compiler-plugin-kotlin-2.2" />
+                  <project path="$PROJECT_DIR$/plugin-build/compiler-plugin-kotlin-2.3" />
                   <project path="$PROJECT_DIR$/plugin-build/plugin" />
                 </projects>
               </build>
@@ -24,6 +27,8 @@
             <option value="$PROJECT_DIR$/example" />
             <option value="$PROJECT_DIR$/plugin-build" />
             <option value="$PROJECT_DIR$/plugin-build/compiler-plugin" />
+            <option value="$PROJECT_DIR$/plugin-build/compiler-plugin-kotlin-2.2" />
+            <option value="$PROJECT_DIR$/plugin-build/compiler-plugin-kotlin-2.3" />
             <option value="$PROJECT_DIR$/plugin-build/plugin" />
           </set>
         </option>

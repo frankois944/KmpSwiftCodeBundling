@@ -22,8 +22,8 @@ abstract class SwiftCodeBundlingPlugin : Plugin<Project> {
             )
 
         project.plugins.withId(KOTLIN_MULTIPLATFORM_PLUGIN_ID) {
-            project.afterEvaluate {
-                SwiftCodeBundlingConfigurator(it, extension).configure()
+            project.afterEvaluate { evaluatedProject ->
+                SwiftCodeBundlingConfigurator(evaluatedProject, extension).configure()
             }
         }
     }

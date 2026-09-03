@@ -5,6 +5,12 @@
       <module name="com.ncorti.kotlin.gradle.template.plugin" target="1.8" />
       <module name="com.ncorti.kotlin.gradle.template.plugin.main" target="1.8" />
       <module name="com.ncorti.kotlin.gradle.template.plugin.test" target="1.8" />
+      <module name="io.github.frankois944.kmpSwiftCodeBundling.compiler-plugin" target="11" />
+      <module name="io.github.frankois944.kmpSwiftCodeBundling.compiler-plugin.kotlin22" target="11" />
+      <module name="io.github.frankois944.kmpSwiftCodeBundling.compiler-plugin.kotlin23" target="11" />
+      <module name="io.github.frankois944.kmpSwiftCodeBundling.compiler-plugin.kotlin24" target="11" />
+      <module name="io.github.frankois944.kmpSwiftCodeBundling.compiler-plugin.main" target="11" />
+      <module name="io.github.frankois944.kmpSwiftCodeBundling.compiler-plugin.test" target="11" />
     </bytecodeTargetLevel>
   </component>
 </project>

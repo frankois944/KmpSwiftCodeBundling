@@ -1,3 +1,24 @@
+/*
+ * Derived from SKIE (https://github.com/touchlab/SKIE)
+ * Copyright 2023 Touchlab, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Based on:
+ *     SKIE/skie-gradle/plugin-impl/src/main/kotlin/co/touchlab/skie/plugin/switflink/ProcessSwiftSourcesTask.kt
+ *
+ * Changes made in this file: uses a DirectoryProperty output and logs the directories it searched.
+ */
 package io.github.frankois944.kmpSwiftCodeBundling
 
 import org.gradle.api.DefaultTask
@@ -12,6 +33,8 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import org.gradle.work.DisableCachingByDefault
+import java.io.File
 import javax.inject.Inject
 
 /**
@@ -19,6 +42,7 @@ import javax.inject.Inject
  * then stored inside the compilation's klib.
  */
 @Suppress("AbstractClassCanBeConcreteClass")
+@DisableCachingByDefault(because = "Copies a handful of local files; a cache round trip would cost more than the work.")
 abstract class ProcessSwiftSourcesTask : DefaultTask() {
     init {
         description = "Collects the Swift sources bundled with this compilation."
@@ -48,26 +72,25 @@ abstract class ProcessSwiftSourcesTask : DefaultTask() {
             searchedDirectories.getOrElse(emptyList()).joinToString(", "),
         )
 
+        // Checked before copying: two files with the same name in different source sets would
+        // otherwise collide during the sync and fail with a copy error instead of this message.
+        verifyFileNames(sources)
+
         fileSystemOperations.sync {
             it.duplicatesStrategy = DuplicatesStrategy.FAIL
             it.from(swiftSources)
             it.into(output)
         }
-
-        verifyFileNames()
     }
 
-    private fun verifyFileNames() {
-        output
-            .get()
-            .asFile
-            .walkTopDown()
-            .filter { it.isFile && it.extension == "swift" }
+    private fun verifyFileNames(sources: Set<File>) {
+        sources
+            .filter { it.extension == "swift" }
             .groupBy { it.name }
             .forEach { (name, files) ->
                 check(files.size == 1) {
-                    "Files $files have the same name '$name'. Swift requires every file of a module to have a " +
-                        "unique name, regardless of its path."
+                    "Swift files ${files.map { it.path }} have the same name '$name'. Swift requires every file " +
+                        "of a module to have a unique name, regardless of its path."
                 }
             }
     }

@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.time.Duration
 
 plugins {
     kotlin("jvm")
@@ -6,25 +7,113 @@ plugins {
     alias(libs.plugins.pluginPublish)
 }
 
+// The functional tests build a real Kotlin Multiplatform project, so the Kotlin Gradle Plugin has to
+// be on the classpath injected by `withPluginClasspath()` - it is only `compileOnly` for the plugin
+// itself, which must never bundle it.
+val functionalTestPluginClasspath: Configuration =
+    configurations.create("functionalTestPluginClasspath") {
+        isCanBeConsumed = false
+        isCanBeResolved = true
+    }
+
 dependencies {
     implementation(kotlin("stdlib"))
     implementation(gradleApi())
 
     // The Kotlin Gradle Plugin is provided by the consuming build, never bundled.
-    compileOnly(libs.kotlin.gradle.plugin)
+    compileOnly(libs.kotlin.gradle.plugin.min)
+    functionalTestPluginClasspath(libs.kotlin.gradle.plugin)
 
     testImplementation(libs.junit)
+    testImplementation(gradleTestKit())
 }
 
-tasks.processResources {
-    filesMatching("**/plugin.properties") {
-        expand(
-            mapOf(
-                "pluginGroup" to project.group.toString(),
-                "pluginVersion" to project.version.toString(),
-            ),
-        )
+tasks.pluginUnderTestMetadata {
+    pluginClasspath.from(functionalTestPluginClasspath)
+}
+
+// Integration tests build real Apple frameworks, so they need macOS, Xcode and the Kotlin/Native
+// toolchain. They live in their own source set and their own task: `test` has to stay runnable
+// anywhere and fast.
+val integrationTestSourceSet: SourceSet = sourceSets.create("integrationTest")
+
+configurations.named("integrationTestImplementation") {
+    extendsFrom(configurations.getByName("testImplementation"))
+}
+
+// Both source sets, otherwise `test` loses the injected plugin classpath.
+gradlePlugin.testSourceSets(sourceSets["test"], integrationTestSourceSet)
+
+val kotlinVersionMatrixTestClass = "*KotlinVersionIntegrationTest"
+
+fun Test.configureIntegrationTest() {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+
+    testClassesDirs = integrationTestSourceSet.output.classesDirs
+    classpath = integrationTestSourceSet.runtimeClasspath
+    shouldRunAfter(tasks.test)
+
+    // The generated projects resolve the plugins the way a real consumer does, from a repository,
+    // so they have to be published first.
+    dependsOn(
+        ":compiler-plugin-kotlin-2.2:publishToMavenLocal",
+        ":compiler-plugin-kotlin-2.3:publishToMavenLocal",
+        ":compiler-plugin-kotlin-2.4:publishToMavenLocal",
+        "publishToMavenLocal",
+    )
+
+    systemProperty("pluginVersion", project.version.toString())
+    systemProperty("kotlinVersions", compilerVariantKotlinVersions.joinToString(","))
+
+    // A Kotlin/Native link is slow, and the first one downloads the toolchain.
+    timeout.set(Duration.ofMinutes(60))
+}
+
+val compilerVariantKotlinVersions =
+    listOf(
+        libs.versions.kotlinCompiler22.get(),
+        libs.versions.kotlinCompiler23.get(),
+        libs.versions.kotlinCompiler24.get(),
+    )
+
+val integrationTest =
+    tasks.register<Test>("integrationTest") {
+        description = "Builds real Apple frameworks with the plugin. Requires macOS with Xcode."
+        configureIntegrationTest()
+        filter { excludeTestsMatching(kotlinVersionMatrixTestClass) }
     }
+
+val kotlinVersionTest =
+    tasks.register<Test>("kotlinVersionTest") {
+        description =
+            "Links a framework with every supported Kotlin version. Downloads one Kotlin/Native toolchain each."
+        configureIntegrationTest()
+        filter { includeTestsMatching(kotlinVersionMatrixTestClass) }
+        shouldRunAfter(integrationTest)
+    }
+
+// The plugin has to know the coordinates of its companion compiler plugin at runtime, so they are
+// generated into a resource rather than hardcoded.
+//
+// This is a generated file rather than a `processResources` filter on purpose: IntelliJ cannot model
+// `filesMatching { expand(...) }` and warns "Cannot resolve resource filtering of MatchingCopyAction"
+// on every Gradle sync. A generated resource directory is something it understands.
+val generatedPluginResources: Provider<Directory> = layout.buildDirectory.dir("generated/pluginResources")
+
+val generatePluginProperties =
+    tasks.register<WriteProperties>("generatePluginProperties") {
+        destinationFile.set(
+            generatedPluginResources.map { it.file("io/github/frankois944/kmpSwiftCodeBundling/plugin.properties") },
+        )
+        property("group", project.group.toString())
+        property("version", project.version.toString())
+    }
+
+sourceSets.named("main") {
+    // `files(...).builtBy(...)` and not `map`/`flatMap` on the task provider: mapping to a provider
+    // that has no producer of its own (`layout.buildDirectory`) silently drops the task dependency,
+    // the generator never runs, and the plugin cannot read its own coordinates at runtime.
+    resources.srcDir(files(generatedPluginResources).builtBy(generatePluginProperties))
 }
 
 java {
@@ -66,7 +155,7 @@ tasks.named("check").configure {
     )
 }
 
-tasks.create("setupPluginUploadFromEnvironment") {
+tasks.register("setupPluginUploadFromEnvironment") {
     doLast {
         val key = System.getenv("GRADLE_PUBLISH_KEY")
         val secret = System.getenv("GRADLE_PUBLISH_SECRET")
