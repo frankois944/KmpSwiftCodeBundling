@@ -180,8 +180,10 @@ version: SKIE fails the build rather than loading when it does not.
   `NativeGenerationState.debugInfo` is first created makes the binary lose its links to the Kotlin
   sources. `RelativeSourcePathsWorkaround` empties the map, touches `debugInfo`, restores it. Never
   ship the option without it.
-- **An empty `ExampleKit-Swift.h` is not a bug.** A Swift `enum` without `@objc` is not exported to
-  Objective-C. Consumers `import ExampleKit` from Swift and get the overlay module.
+- **A near-empty `ExampleKit-Swift.h` is not a bug.** Only `@objc` members of `NSObject` subclasses
+  reach Objective-C - in the example, `ObjCFriendlyGreeter` and nothing else. The enums and the
+  extensions are missing from that header by design; Swift consumers `import ExampleKit` and get
+  them from the overlay module.
 
 ## Configuration cache
 
