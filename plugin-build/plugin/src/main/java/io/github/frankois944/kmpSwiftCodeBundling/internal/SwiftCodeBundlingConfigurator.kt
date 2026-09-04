@@ -131,11 +131,17 @@ internal class SwiftCodeBundlingConfigurator(
         }
     }
 
+    /**
+     * A resolvable configuration of its own for the compiler plugin, so that resolving it cannot
+     * disturb anything the consumer declared.
+     *
+     * `isVisible` is deliberately not set: it only ever controlled legacy `uploadArchives`
+     * publishing, and Gradle deprecated it for removal.
+     */
     private fun createCompilerPluginConfiguration(): Configuration =
         project.configurations.maybeCreate(SwiftBundling.COMPILER_PLUGIN_CONFIGURATION).apply {
             isCanBeConsumed = false
             isCanBeResolved = true
-            isVisible = false
 
             project.dependencies.add(name, CompilerPluginArtifact.dependencyNotation(project.getKotlinPluginVersion()))
         }
