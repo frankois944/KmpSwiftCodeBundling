@@ -124,6 +124,10 @@ configure. Kotlin releases newer than those listed fall back to the most recent 
 
 - **Gradle's configuration cache is not supported yet.** Builds using `--configuration-cache` will
   report the plugin as incompatible.
+- **Cannot run alongside [SKIE](https://skie.touchlab.co).** SKIE bundles Swift code the same way,
+  by intercepting the same Kotlin/Native linker phase. When SKIE is applied to the same module this
+  plugin disables itself and logs a warning, leaving the framework to SKIE — use SKIE's own Swift
+  code bundling there, or remove SKIE.
 
 ## Contributing
 

@@ -22,8 +22,15 @@ internal class AppleFrameworkProject(
      * of taking them from the classpath TestKit injects. That is the only way to exercise a Kotlin
      * version other than the one this build was compiled against - and it goes through the real
      * plugin marker, exactly as a consumer would.
+     *
+     * It is also the only mode a third-party plugin can be trusted in: SKIE finds the Kotlin Gradle
+     * Plugin by loading `KotlinBasePlugin` from its own class loader and testing the applied plugins
+     * against it, which never matches the copy TestKit injects. SKIE then logs that it cannot infer
+     * the Kotlin version and quietly does nothing.
      */
     private val kotlinVersion: String? = null,
+    /** When set, the project also applies the real SKIE plugin at this version. */
+    private val skieVersion: String? = null,
 ) {
     val frameworkDirectory: File
         get() = root.resolve("build/bin/$target/debugFramework/$FRAMEWORK_NAME.framework")
@@ -72,6 +79,7 @@ internal class AppleFrameworkProject(
     fun singleModule(
         pluginConfiguration: String = "",
         isStatic: Boolean = false,
+        skieConfiguration: String = "",
     ) {
         writeSettings("")
         write(
@@ -93,10 +101,16 @@ internal class AppleFrameworkProject(
             swiftCodeBundling {
                 $pluginConfiguration
             }
+
+            ${skieBlock(skieConfiguration)}
             """,
         )
         writePlaceholderKotlin("src/commonMain/kotlin/Placeholder.kt")
     }
+
+    /** Kept on one line: a multi-line insert would defeat the `trimIndent` of the template. */
+    private fun skieBlock(configuration: String): String =
+        if (skieVersion == null) "" else "skie { $configuration }"
 
     /**
      * Two modules: the Swift lives in a library the framework module merely depends on, so it can
@@ -138,19 +152,23 @@ internal class AppleFrameworkProject(
         )
     }
 
+    /**
+     * With no [kotlinVersion] the plugins come from the classpath TestKit injects, so they carry no
+     * version; with one, both are resolved from repositories through their plugin markers, exactly
+     * as a consumer resolves them. SKIE is always resolved from a repository.
+     */
     private val pluginsBlock: String
         get() =
-            if (kotlinVersion == null) {
-                """
-                id("org.jetbrains.kotlin.multiplatform")
-                id("io.github.frankois944.kmpSwiftCodeBundling")
-                """.trimIndent()
-            } else {
-                """
-                id("org.jetbrains.kotlin.multiplatform") version "$kotlinVersion"
-                id("io.github.frankois944.kmpSwiftCodeBundling") version "$PLUGIN_VERSION"
-                """.trimIndent()
-            }
+            listOfNotNull(
+                pluginLine("org.jetbrains.kotlin.multiplatform", kotlinVersion),
+                pluginLine(PLUGIN_ID, kotlinVersion?.let { PLUGIN_VERSION }),
+                skieVersion?.let { pluginLine(SKIE_PLUGIN_ID, it) },
+            ).joinToString("\n")
+
+    private fun pluginLine(
+        id: String,
+        version: String?,
+    ): String = if (version == null) "id(\"$id\")" else "id(\"$id\") version \"$version\""
 
     /**
      * A module with no Kotlin source at all produces no framework, so every generated project gets
@@ -201,6 +219,18 @@ internal class AppleFrameworkProject(
 
     companion object {
         const val FRAMEWORK_NAME = "IntegrationKit"
+
+        const val PLUGIN_ID = "io.github.frankois944.kmpSwiftCodeBundling"
+
+        const val SKIE_PLUGIN_ID = "co.touchlab.skie"
+
+        /** Version of SKIE the coexistence test applies, from the version catalog. */
+        val SKIE_VERSION: String
+            get() = System.getProperty("skieVersion") ?: error("skieVersion system property is not set")
+
+        /** The Kotlin version this build uses, from the version catalog. */
+        val KOTLIN_VERSION: String
+            get() = System.getProperty("kotlinVersion") ?: error("kotlinVersion system property is not set")
 
         /** Version of the plugin under test, published to mavenLocal by the Gradle task. */
         val PLUGIN_VERSION: String

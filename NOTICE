@@ -35,6 +35,9 @@ based on and stating how it was changed. The files concerned are:
         internal/SwiftCodeBundlingConfigurator.kt
         internal/Zip.kt
 
+    plugin-build/plugin/src/test/java/co/touchlab/skie/
+        StubSkiePlugin.kt
+
 SKIE's Command.kt is itself derived from the Kotlin compiler,
 Copyright 2010-2017 JetBrains s.r.o., also under the Apache License 2.0.
 

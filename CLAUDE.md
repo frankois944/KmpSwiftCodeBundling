@@ -41,7 +41,7 @@ Tests come in three layers, all under `plugin-build/plugin`:
 | --- | --- | --- |
 | `-p plugin-build :compiler-plugin-kotlin-2.4:test` | The pure parts of the compiler plugin — output file map, module map, stale intermediates, framework layout, target triple | any host |
 | `test` | Unit tests and TestKit functional tests of the Gradle plugin | any host |
-| `integrationTest` | Links real Apple frameworks, four platforms, static, XCFramework, incremental | macOS with Xcode |
+| `integrationTest` | Links real Apple frameworks, four platforms, static, XCFramework, incremental, coexistence with the real SKIE | macOS with Xcode |
 | `kotlinVersionTest` | Links with every supported Kotlin version | macOS, downloads one Kotlin/Native toolchain per version, CI runs it on `main` only |
 
 The compiler plugin's own tests compile against one variant (the newest); the tested code is
@@ -116,6 +116,48 @@ nothing compilation-specific: it reads what to do from the `CompilerConfiguratio
 compilation, under a key stored *inside the installed wrapper* so that two copies of the plugin
 loaded by different class loaders agree on where to look. Everything is erased to `Any` because the
 two phases have unrelated context and input types.
+
+### Coexistence with SKIE
+
+There is none: SKIE compiles Swift into the framework exactly the way this plugin does, so whenever
+SKIE is active `SwiftCodeBundlingConfigurator.configure` logs a warning and registers nothing.
+
+`SkieDetection` reads SKIE by reflection — it is not on the classpath here and must not be — and
+returns one of three states:
+
+| State | What SKIE is doing | This plugin |
+| --- | --- | --- |
+| `INACTIVE` | not applied, or `skie { isEnabled = false }` | runs |
+| `BUNDLING_SWIFT` | applied, defaults | stands down |
+| `GENERATING_SWIFT_ONLY` | `skie { swiftBundling { enabled = false } }` | stands down |
+
+**`skie { swiftBundling { enabled = false } }` does not make room for us**, which is the
+counter-intuitive part. In SKIE that flag only guards `processSwiftSources` (an `onlyIf` in
+`SwiftBundlingConfigurator`) and therefore what `LoadCustomSwiftSourceFilesPhase` finds: SKIE stops
+reading `src/<sourceSet>/swift`, but its `LinkerPhaseInterceptor` still runs `swiftc` over the Swift
+it generates, and `GenerateModulemapFilePhase.ForFramework` still *rewrites* the framework module map
+with its own `module <Name>.Swift`. Two overlay modules of the same name cannot coexist, so the state
+only changes the wording of the warning. What does clear the way is `skie { isEnabled = false }`,
+which makes `SkieGradlePluginApplier.configureSkieCompilerPlugin` return before adding SKIE's
+compiler plugin at all.
+
+Read through the public `skie` extension (`SkieExtension.isEnabled`,
+`SkieExtension.swiftBundling.enabled`, both `Property<Boolean>`), after evaluation, when SKIE reads
+it too. Anything unreadable — an unknown SKIE version — counts as SKIE bundling, so the plugin steps
+aside rather than fights it. Note the getter names: Kotlin compiles `val isEnabled` to `isEnabled()`,
+not `getIsEnabled()`.
+
+Tested at three levels. `SkieDetectionTest` drives the states through a stub in `co.touchlab.skie`
+mirroring SKIE's extension, and `SwiftCodeBundlingFunctionalTest` through a `buildSrc` plugin
+carrying SKIE's id — both fast, neither proof that SKIE still looks like that.
+`SkieCoexistenceIntegrationTest` is: it applies the real SKIE (version in the catalog, passed in as
+the `skieVersion` system property) and links the framework, checking who bundled the Swift by
+looking for the symbol in the binary and for this plugin's `work/logs/swiftc.log`. It is also what
+would catch SKIE renaming those properties — the detection would silently fall back to
+`BUNDLING_SWIFT`, and only `takes over when skie is disabled` would fail.
+
+Bumping the catalog's `skie` version means checking it still supports the catalog's `kotlin`
+version: SKIE fails the build rather than loading when it does not.
 
 ## Traps — do not reintroduce these
 

@@ -64,6 +64,8 @@ fun Test.configureIntegrationTest() {
 
     systemProperty("pluginVersion", project.version.toString())
     systemProperty("kotlinVersions", compilerVariantKotlinVersions.joinToString(","))
+    systemProperty("skieVersion", libs.versions.skie.get())
+    systemProperty("kotlinVersion", libs.versions.kotlin.get())
 
     // A Kotlin/Native link is slow, and the first one downloads the toolchain.
     timeout.set(Duration.ofMinutes(60))

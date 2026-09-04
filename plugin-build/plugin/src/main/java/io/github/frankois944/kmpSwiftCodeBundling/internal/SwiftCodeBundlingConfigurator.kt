@@ -65,7 +65,7 @@ internal class SwiftCodeBundlingConfigurator(
     }
 
     fun configure() {
-        if (!extension.enabled.get()) {
+        if (!extension.enabled.get() || standsDownForSkie()) {
             return
         }
 
@@ -82,6 +82,24 @@ internal class SwiftCodeBundlingConfigurator(
         }
 
         configureFatFrameworks()
+    }
+
+    /**
+     * Whether SKIE owns the Swift of this project's frameworks, in which case this plugin does
+     * nothing at all.
+     *
+     * It warns on the way out rather than stepping aside quietly: bundling was asked for, and a
+     * framework silently built without its Swift is the harder thing to diagnose.
+     */
+    private fun standsDownForSkie(): Boolean {
+        val status = SkieDetection.statusOf(project)
+        val standsDown = status != SkieDetection.Status.INACTIVE
+
+        if (standsDown) {
+            project.logger.warn(SkieDetection.conflictWarning(project.path, status))
+        }
+
+        return standsDown
     }
 
     /**
