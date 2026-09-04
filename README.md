@@ -66,6 +66,22 @@ Three rules, and the build tells you when you break the third:
 - **File names must be unique** across all your source sets, whatever the directory — Swift requires
   it of every file in a module.
 
+### Where the files go
+
+`src/<sourceSet>/kotlin` → `src/<sourceSet>/swift`, for **every** source set of the compilation. The
+Swift travels exactly as far as the Kotlin next to it:
+
+| Directory | Reaches |
+| --- | --- |
+| `src/commonMain/swift` | every Apple framework of the module |
+| `src/appleMain/swift`, `src/iosMain/swift` | the frameworks under that part of the hierarchy |
+| `src/iosArm64Main/swift` | the `iosArm64` framework only |
+| `src/macosArm64Main/swift` | the `macosArm64` framework only |
+
+Intermediate source sets you declared yourself follow the same rule, and so do compilations other
+than `main`. It is the layout [SKIE](https://skie.touchlab.co/features/swift-code-bundling) uses, so
+moving from it changes nothing on disk.
+
 ## What it handles
 
 | | |
