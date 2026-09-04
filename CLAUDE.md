@@ -183,6 +183,33 @@ version: SKIE fails the build rather than loading when it does not.
 - **An empty `ExampleKit-Swift.h` is not a bug.** A Swift `enum` without `@objc` is not exported to
   Objective-C. Consumers `import ExampleKit` from Swift and get the overlay module.
 
+## Configuration cache
+
+Supported, and the report attributes nothing to this plugin — no problems, no configuration-time
+inputs. What keeps it that way, none of it accidental:
+
+- Task actions added with `doLast` hold **plain values**, never a `Project`, a `Task` or a KGP model
+  object: `MergeBundledSwiftIntoFatFramework` takes `File`s and a `List<FatFrameworkSlice>` of
+  strings, `BundleSwiftSourcesIntoKlib` takes providers that resolve to files.
+- `appleTargets` is keyed by `KonanTarget.name`, because `KonanTarget` instances do not survive
+  serialization.
+- The XCFramework detection matches output paths instead of calling
+  `taskDependencies.getDependencies()`, which is forbidden under the configuration cache.
+- `gradle.taskGraph.whenReady` is fine — SKIE uses it for the same purpose.
+
+Two tests guard it: `reuses the configuration cache` (functional, any host) and
+`bundles the swift again with the configuration cache reused` (integration, macOS) — the second is
+the one that matters, because it proves the Swift still reaches the framework in a build where
+configuration never ran.
+
+**A `clean` invalidates the entry, and that is not ours to fix.** The Kotlin Gradle Plugin reads the
+path of `<Framework>.framework.dSYM` at configuration time (`FrameworkDsymLayout`), so removing the
+outputs is a configuration input change: `Calculating task graph as configuration cache cannot be
+reused because the file system entry '…ExampleKit.framework.dSYM' has been removed`. Check the
+report's input traces before assuming a cache miss belongs to this plugin — the report lives at
+`build/reports/configuration-cache/*/*/configuration-cache-report.html`, and its embedded JSON names
+the class that registered every input.
+
 ## Kotlin version coupling
 
 The compiler plugin uses Kotlin/Native internals, so a jar built against one Kotlin version will not

@@ -215,7 +215,8 @@ internal class AppleFrameworkProject(
             .forwardOutput()
             .build()
 
-    fun link(): BuildResult = build("linkDebugFramework${target.replaceFirstChar { it.uppercase() }}")
+    fun link(vararg extraArguments: String): BuildResult =
+        build("linkDebugFramework${target.replaceFirstChar { it.uppercase() }}", *extraArguments)
 
     companion object {
         const val FRAMEWORK_NAME = "IntegrationKit"

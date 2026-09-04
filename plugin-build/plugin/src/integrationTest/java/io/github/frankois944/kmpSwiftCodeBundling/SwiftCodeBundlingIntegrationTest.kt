@@ -132,6 +132,32 @@ class SwiftCodeBundlingIntegrationTest {
     }
 
     @Test
+    fun `bundles the swift again with the configuration cache reused`() {
+        project.singleModule()
+        val greeter = writeGreeter()
+
+        project.link("--configuration-cache")
+
+        // A source change re-runs the link task while leaving the outputs in place. Deleting them
+        // instead would invalidate the entry itself: the Kotlin Gradle Plugin reads the path of the
+        // framework's dSYM at configuration time (`FrameworkDsymLayout`), so a `clean` is a
+        // configuration input change, not a cache miss of ours.
+        greeter.writeText(greeter.readText().replace("enum Greeter", "enum RebuiltGreeter"))
+
+        val second = project.link("--configuration-cache")
+
+        assertTrue(
+            "the configuration cache entry was not reused:\n${second.output}",
+            second.output.contains("Reusing configuration cache"),
+        )
+        // The point of the test: a build that skips configuration must still bundle the Swift.
+        assertTrue(
+            "the Swift did not reach the framework of the second, cache-reusing build",
+            project.frameworkBinary.containsSymbol("RebuiltGreeter"),
+        )
+    }
+
+    @Test
     fun `recompiles only the swift file that changed`() {
         // Asserted on the Swift driver's own decisions rather than on file timestamps: with batch
         // mode several files share one frontend job, so an object file can be rewritten without its

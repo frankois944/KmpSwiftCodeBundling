@@ -357,6 +357,16 @@ class SwiftCodeBundlingFunctionalTest {
     }
 
     @Test
+    fun `reuses the configuration cache`() {
+        write("src/commonMain/swift/Common.swift", "public enum Common {}")
+
+        build("processSwiftSourcesIosSimulatorArm64", "--configuration-cache")
+        val second = build("processSwiftSourcesIosSimulatorArm64", "--configuration-cache")
+
+        assertTrue("the entry was not reused:\n${second.output}", second.output.contains(CACHE_REUSED))
+    }
+
+    @Test
     fun `registers no task when bundling is disabled`() {
         buildFileWith(
             """
@@ -370,5 +380,10 @@ class SwiftCodeBundlingFunctionalTest {
         val result = build("tasks", "--all")
 
         assertFalse(result.output.contains("processSwiftSourcesIosSimulatorArm64"))
+    }
+
+    private companion object {
+        /** What Gradle prints when a stored configuration cache entry is used instead of rebuilt. */
+        const val CACHE_REUSED = "Reusing configuration cache"
     }
 }
