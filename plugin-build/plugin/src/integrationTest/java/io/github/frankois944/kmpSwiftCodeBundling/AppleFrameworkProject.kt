@@ -109,8 +109,7 @@ internal class AppleFrameworkProject(
     }
 
     /** Kept on one line: a multi-line insert would defeat the `trimIndent` of the template. */
-    private fun skieBlock(configuration: String): String =
-        if (skieVersion == null) "" else "skie { $configuration }"
+    private fun skieBlock(configuration: String): String = if (skieVersion == null) "" else "skie { $configuration }"
 
     /**
      * Two modules: the Swift lives in a library the framework module merely depends on, so it can
