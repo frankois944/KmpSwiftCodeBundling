@@ -86,16 +86,6 @@ Intermediate source sets you declared yourself follow the same rule, and so do c
 than `main`. It is the layout [SKIE](https://skie.touchlab.co/features/swift-code-bundling) uses, so
 moving from it changes nothing on disk.
 
-## What it handles
-
-| | |
-| --- | --- |
-| **Platforms** | iOS, macOS, watchOS, tvOS |
-| **Binaries** | Dynamic and static frameworks |
-| **XCFrameworks** | Yes, multi-architecture slices included |
-| **Library modules** | Swift in a library travels to whichever app framework depends on it |
-| **Build times** | Debug builds recompile only the Swift files that changed |
-
 ## Configuration
 
 All optional; the defaults suit local development.
