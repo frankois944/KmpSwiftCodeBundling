@@ -22,6 +22,10 @@ Greeting().greet(name: "François")   // Kotlin
 Greeter.greet("François")            // your Swift
 ```
 
+> **Note:** [SKIE already supports Swift bundling](https://skie.touchlab.co/features/swift-code-bundling).
+> If you already use SKIE, you get this feature there — this plugin is a standalone alternative for
+> projects that don't.
+
 ## Quick start
 
 **1.** Apply the plugin next to `kotlin("multiplatform")`:
