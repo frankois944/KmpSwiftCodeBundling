@@ -55,14 +55,13 @@ internal class SwiftCodeBundlingConfigurator(
      * framework is built identically whether it is linked on its own or as part of the XCFramework.
      * Matching on the task's input files avoids `taskDependencies.getDependencies()`, which Gradle
      * forbids under the configuration cache.
+     *
+     * Set by [configure] before it registers any callback, and never from inside one: realizing an
+     * `XCFrameworkTask` runs the configuration other plugins attached to it, and Compose
+     * Multiplatform's one calls `kotlin.targets.configureEach`, which Gradle refuses from within a
+     * callback on that same collection.
      */
-    private val xcFrameworkInputPaths: Set<String> by lazy {
-        project.tasks
-            .withType(XCFrameworkTask::class.java)
-            .toList()
-            .flatMap { it.inputs.files.files }
-            .mapTo(mutableSetOf()) { it.canonicalPath }
-    }
+    private lateinit var xcFrameworkInputPaths: Set<String>
 
     fun configure() {
         if (!extension.enabled.get() || standsDownForSkie()) {
@@ -70,6 +69,13 @@ internal class SwiftCodeBundlingConfigurator(
         }
 
         val kotlin = project.extensions.findByType(KotlinMultiplatformExtension::class.java) ?: return
+
+        xcFrameworkInputPaths =
+            project.tasks
+                .withType(XCFrameworkTask::class.java)
+                .toList()
+                .flatMap { it.inputs.files.files }
+                .mapTo(mutableSetOf()) { it.canonicalPath }
 
         kotlin.targets.withType(KotlinNativeTarget::class.java).configureEach { target ->
             target.compilations.configureEach { compilation ->

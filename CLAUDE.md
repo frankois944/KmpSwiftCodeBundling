@@ -41,7 +41,7 @@ Tests come in three layers, all under `plugin-build/plugin`:
 | --- | --- | --- |
 | `-p plugin-build :compiler-plugin-kotlin-2.4:test` | The pure parts of the compiler plugin — output file map, module map, stale intermediates, framework layout, target triple | any host |
 | `test` | Unit tests and TestKit functional tests of the Gradle plugin | any host |
-| `integrationTest` | Links real Apple frameworks, four platforms, static, XCFramework, incremental, coexistence with the real SKIE | macOS with Xcode |
+| `integrationTest` | Links real Apple frameworks, four platforms, static, XCFramework, incremental, coexistence with the real SKIE and Compose Multiplatform | macOS with Xcode |
 | `kotlinVersionTest` | Links with every supported Kotlin version | macOS, downloads one Kotlin/Native toolchain per version, CI runs it on `main` only |
 
 The compiler plugin's own tests compile against one variant (the newest); the tested code is
@@ -164,6 +164,10 @@ version: SKIE fails the build rather than loading when it does not.
 - **`compilation.allKotlinSourceSets` fills in progressively.** Reading it eagerly returns an empty
   set and `processSwiftSources` silently becomes NO-SOURCE. It is read through a `project.provider {}`
   to defer resolution. SKIE uses its `forAll` callback for the same reason.
+- **Never realize other plugins' tasks from inside a `configureEach`.** The XCFramework tasks are
+  resolved in `configure()`, before any callback: Compose Multiplatform configures every
+  `XCFrameworkTask` with a `kotlin.targets.configureEach`, which Gradle refuses from inside our own
+  callback on that collection, and the whole project fails to configure (`ComposeResourcesIntegrationTest`).
 - **`KotlinNativeCompile.outputFile` is a `Provider<File>`**, not a `Provider<FileSystemLocation>`,
   so Gradle cannot infer the producing task from it — `dependsOn(compileTaskProvider)` is explicit.
 - **Swift runtime linker arguments are required**, otherwise a dynamic framework cannot find

@@ -31,6 +31,12 @@ internal class AppleFrameworkProject(
     private val kotlinVersion: String? = null,
     /** When set, the project also applies the real SKIE plugin at this version. */
     private val skieVersion: String? = null,
+    /**
+     * When set, the project also applies the real Compose Multiplatform plugin, and the Compose
+     * compiler plugin, at this version. Like SKIE, it needs a [kotlinVersion]: both look the Kotlin
+     * Gradle Plugin up from their own class loader.
+     */
+    private val composeVersion: String? = null,
 ) {
     val frameworkDirectory: File
         get() = root.resolve("build/bin/$target/debugFramework/$FRAMEWORK_NAME.framework")
@@ -55,6 +61,9 @@ internal class AppleFrameworkProject(
 
     val swiftHeader: File
         get() = frameworkContent.resolve("Headers/$FRAMEWORK_NAME-Swift.h")
+
+    val xcFrameworkDirectory: File
+        get() = root.resolve("build/XCFrameworks/debug/$FRAMEWORK_NAME.xcframework")
 
     private val workDirectory: File
         get() = root.resolve("build/swift-code-bundling/binaries/$target/debugFramework/work")
@@ -112,6 +121,58 @@ internal class AppleFrameworkProject(
     private fun skieBlock(configuration: String): String = if (skieVersion == null) "" else "skie { $configuration }"
 
     /**
+     * A single module using Compose Multiplatform resources, its framework also assembled into an
+     * XCFramework - the two together are what the Compose plugin wires its resources through.
+     */
+    fun composeModule() {
+        val composeVersion = checkNotNull(composeVersion) { "composeVersion is not set" }
+        writeSettings("")
+        write(
+            "build.gradle.kts",
+            """
+            import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
+
+            plugins {
+                $pluginsBlock
+            }
+
+            kotlin {
+                val xcFramework = XCFramework("$FRAMEWORK_NAME")
+                $target {
+                    binaries.framework {
+                        baseName = "$FRAMEWORK_NAME"
+                        xcFramework.add(this)
+                    }
+                }
+                sourceSets.commonMain.dependencies {
+                    implementation("org.jetbrains.compose.runtime:runtime:$composeVersion")
+                    implementation("org.jetbrains.compose.components:components-resources:$composeVersion")
+                }
+            }
+            """,
+        )
+        write(
+            "src/commonMain/composeResources/values/strings.xml",
+            """
+            <resources>
+                <string name="greeting">hello from compose resources</string>
+            </resources>
+            """,
+        )
+        // Goes through the generated accessor, so the resources really are wired into the build.
+        write(
+            "src/commonMain/kotlin/Greeting.kt",
+            """
+            import integration_test.generated.resources.Res
+            import integration_test.generated.resources.greeting
+            import org.jetbrains.compose.resources.getString
+
+            suspend fun composeGreeting(): String = getString(Res.string.greeting)
+            """,
+        )
+    }
+
+    /**
      * Two modules: the Swift lives in a library the framework module merely depends on, so it can
      * only reach the framework by travelling through the library's klib.
      */
@@ -162,6 +223,8 @@ internal class AppleFrameworkProject(
                 pluginLine("org.jetbrains.kotlin.multiplatform", kotlinVersion),
                 pluginLine(PLUGIN_ID, kotlinVersion?.let { PLUGIN_VERSION }),
                 skieVersion?.let { pluginLine(SKIE_PLUGIN_ID, it) },
+                composeVersion?.let { pluginLine(COMPOSE_COMPILER_PLUGIN_ID, kotlinVersion) },
+                composeVersion?.let { pluginLine(COMPOSE_PLUGIN_ID, it) },
             ).joinToString("\n")
 
     private fun pluginLine(
@@ -185,6 +248,7 @@ internal class AppleFrameworkProject(
                 repositories {
                     mavenLocal()
                     gradlePluginPortal()
+                    google()
                     mavenCentral()
                 }
             }
@@ -194,6 +258,7 @@ internal class AppleFrameworkProject(
                     // The companion compiler plugin is resolved from here, exactly as a real
                     // consumer would resolve it.
                     mavenLocal()
+                    google()
                     mavenCentral()
                 }
             }
@@ -217,6 +282,9 @@ internal class AppleFrameworkProject(
     fun link(vararg extraArguments: String): BuildResult =
         build("linkDebugFramework${target.replaceFirstChar { it.uppercase() }}", *extraArguments)
 
+    fun assembleXCFramework(vararg extraArguments: String): BuildResult =
+        build("assemble${FRAMEWORK_NAME}DebugXCFramework", *extraArguments)
+
     companion object {
         const val FRAMEWORK_NAME = "IntegrationKit"
 
@@ -224,9 +292,17 @@ internal class AppleFrameworkProject(
 
         const val SKIE_PLUGIN_ID = "co.touchlab.skie"
 
+        const val COMPOSE_PLUGIN_ID = "org.jetbrains.compose"
+
+        const val COMPOSE_COMPILER_PLUGIN_ID = "org.jetbrains.kotlin.plugin.compose"
+
         /** Version of SKIE the coexistence test applies, from the version catalog. */
         val SKIE_VERSION: String
             get() = System.getProperty("skieVersion") ?: error("skieVersion system property is not set")
+
+        /** Version of Compose Multiplatform the Compose test applies, from the version catalog. */
+        val COMPOSE_VERSION: String
+            get() = System.getProperty("composeVersion") ?: error("composeVersion system property is not set")
 
         /** The Kotlin version this build uses, from the version catalog. */
         val KOTLIN_VERSION: String
